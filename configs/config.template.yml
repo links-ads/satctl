@@ -1,0 +1,41 @@
+download:
+  http:
+    max_retries: 3
+    timeout: 30
+    pool_connections: 10
+    pool_maxsize: 4
+
+auth:
+  odata:
+    token_url: "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    client_id: "cdse-public"
+    username: $ODATA_USERNAME
+    password: $ODATA_PASSWORD
+
+  eumetsat:
+    consumer_key: $EUMETSAT_CONSUMER_KEY
+    consumer_secret: $EUMETSAT_CONSUMER_SECRET
+
+  earthdata:
+    username: $EARTHDATA_USERNAME
+    password: $EARTHDATA_PASSWORD
+
+sources:
+  slstr:
+    authenticator: "odata"
+    downloader: "http"
+    composite: "all_bands_1km"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+
+  olci:
+    authenticator: "odata"
+    downloader: "http"
+    composite: "all_bands_300m"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+
+writer:
+  geotiff:
+    compress: lzw
+    tiled: true

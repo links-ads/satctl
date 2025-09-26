@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# additional material that could be pushed in the future
+uv.lock
+.python-version
+data/
+outputs/

@@ -1,0 +1,38 @@
+[project]
+name = "satctl"
+version = "0.1.0"
+description = "Toolkit to search, download and process Earth Observation data"
+readme = "README.md"
+authors = [
+    { name = "Edoardo Arnaudo", email = "edoardo.arnaudo@linksfoundation.com" },
+    { name = "Andrea Bragagnolo", email = "andrea.bragagnolo@linksfoundation.com" },
+]
+requires-python = ">=3.10"
+dependencies = [
+    "earthaccess>=0.14.0",
+    "envyaml>=1.10.211231",
+    "odc-stac>=0.4.0",
+    "pydantic>=2.11.9",
+    "pydantic-settings>=2.10.1",
+    "pyproj>=3.7.1",
+    "pyresample>=1.31.0",
+    "pystac>=1.14.1",
+    "pystac-client>=0.9.0",
+    "satpy>=0.58.0",
+    "shapely>=2.1.1",
+]
+
+[project.optional-dependencies]
+console = ["rich>=14.1.0", "typer>=0.19.2"]
+dev = ["ruff>=0.13.2"]
+test = ["pytest>=8.4.2"]
+
+[project.scripts]
+eokit = "satctl.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 119

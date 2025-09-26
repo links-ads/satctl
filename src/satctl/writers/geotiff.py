@@ -1,0 +1,156 @@
+import logging
+from pathlib import Path
+from typing import Any, cast
+
+import numpy as np
+import rasterio
+import rasterio.crs
+import rasterio.transform
+from pyproj import CRS
+from rasterio.transform import Affine
+from satpy.scene import Scene
+from xarray import DataArray
+
+from satctl.writers import Writer
+
+log = logging.getLogger(__name__)
+
+
+class GeoTIFFWriter(Writer):
+    """Writer for GeoTIFF format with configurable options."""
+
+    def __init__(
+        self,
+        compress: str = "lzw",
+        tiled: bool = True,
+        dtype: Any | None = None,
+        fill_value: Any = None,
+    ):
+        self.compress = compress
+        self.tiled = tiled
+        self.dtype = dtype
+        self.fill_value = fill_value
+
+    def _get_transform_gcps(self, data_arr: DataArray) -> tuple[CRS | None, Affine | None, Any]:
+        crs = None
+        transform = None
+        gcps = None
+
+        try:
+            area = data_arr.attrs["area"]
+            # try AreaDefinition first (regular grid)
+            if hasattr(area, "crs"):
+                crs = rasterio.crs.CRS.from_wkt(area.crs.to_wkt(version="WKT2_2018"))
+            elif hasattr(area, "proj_dict"):
+                crs = rasterio.crs.CRS(area.proj_dict)
+            # get transform for regular grids
+            if hasattr(area, "area_extent") and hasattr(area, "shape"):
+                west, south, east, north = area.area_extent
+                height, width = area.shape
+                transform = rasterio.transform.from_bounds(west, south, east, north, width, height)
+                log.debug(f"Created transform from AreaDefinition: {transform}")
+
+        except (KeyError, AttributeError):
+            # Fall back to SwathDefinition (irregular grid with GCPs)
+            try:
+                area = data_arr.attrs["area"]
+                if hasattr(area, "lons") and hasattr(area.lons, "attrs"):
+                    gcps = area.lons.attrs.get("gcps")
+                    crs = area.lons.attrs.get("crs")
+                    if gcps and crs:
+                        log.debug(f"Using GCPs from SwathDefinition: {len(gcps)} points")
+            except (KeyError, AttributeError):
+                log.warning("Couldn't extract geospatial information from DataArray")
+
+        return crs, transform, gcps
+
+    def _create_profile(
+        self,
+        height: int,
+        width: int,
+        bands: int,
+        dtype: Any,
+        crs: CRS | None,
+        transform: Affine | None,
+    ):
+        return {
+            "driver": "GTiff",
+            "height": height,
+            "width": width,
+            "count": bands,
+            "dtype": dtype,
+            "crs": crs,
+            "transform": transform,
+            "compress": self.compress,
+            "tiled": self.tiled,
+            "nodata": self.fill_value,
+        }
+
+    def write(
+        self,
+        scene: Scene,
+        output_path: Path,
+        composite: str,
+        **tags,
+    ) -> bool:
+        """Write scene composite to GeoTIFF."""
+        try:
+            dataset: DataArray = cast(DataArray, scene[composite])
+            crs, transform, gcps = self._get_transform_gcps(dataset)
+
+            # Prepare data
+            data = dataset.values
+            if data.ndim == 2:
+                data = data.reshape(1, data.shape[0], data.shape[1])
+                num_bands = 1
+            elif data.ndim == 3:
+                if "bands" in dataset.dims:
+                    band_dim_idx = dataset.dims.index("bands")
+                    if band_dim_idx != 0:
+                        axes = list(range(data.ndim))
+                        axes[0], axes[band_dim_idx] = axes[band_dim_idx], axes[0]
+                        data = np.transpose(data, axes)
+                num_bands = data.shape[0]
+            else:
+                raise ValueError(f"Unsupported data dimensions: {data.shape}")
+            height, width = data.shape[-2:]
+
+            # determine dtype and fill_value
+            dtype = self.dtype or data.dtype
+            if self.fill_value is None and np.issubdtype(dtype, np.floating):
+                self.fill_value = np.nan
+
+            # get band names
+            band_names = []
+            if "bands" in dataset.coords:
+                band_names = [str(name) for name in dataset.coords["bands"].values]
+            else:
+                band_names = [f"band_{i + 1}" for i in range(num_bands)]
+
+            # add GCPs if available (for swath data)
+            profile = self._create_profile(height, width, num_bands, dtype, crs, transform)
+            if gcps is not None and crs is not None:
+                profile["gcps"] = gcps
+                profile.pop("transform", None)
+            log.debug("Saving %d-band GeoTIFF: %s", num_bands, output_path.name)
+            log.debug("Data shape: %s, dtype: %s", data.shape, dtype)
+
+            # write the GeoTIFF
+            with rasterio.open(output_path, "w", **profile) as dst:
+                for i in range(num_bands):
+                    dst.write(data[i], i + 1)
+                    dst.set_band_description(i + 1, band_names[i])
+                # add metadata
+                tags = tags or {}
+                tags.update(composite=composite)
+                for key, value in dataset.attrs.items():
+                    if isinstance(value, (str, int, float)) and key not in ["area"]:
+                        tags[key] = str(value)
+                dst.update_tags(**tags)
+
+            log.debug("Successfully saved: %s", output_path)
+            return True
+
+        except Exception as e:
+            log.error("Failed to write %s: %s", output_path, str(e))
+            return False
