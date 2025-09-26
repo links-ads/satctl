@@ -28,7 +28,7 @@ dev = ["ruff>=0.13.2"]
 test = ["pytest>=8.4.2"]
 
 [project.scripts]
-eokit = "satctl.cli:app"
+satctl = "satctl.cli:app"
 
 [build-system]
 requires = ["hatchling"]
