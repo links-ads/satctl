@@ -40,11 +40,10 @@ class HTTPDownloader(Downloader):
         self,
         uri: str,
         destination: Path,
-        progress: ProgressReporter | None = None,
-        task_id: str | None = None,
+        item_id: str,
+        progress: ProgressReporter,
     ) -> bool:
         """Download file from HTTP URL with retries and progress reporting."""
-
         for attempt in range(self.max_retries):
             try:
                 # Ensure we have authentication
@@ -67,8 +66,7 @@ class HTTPDownloader(Downloader):
                 total_size = None
                 if "Content-Length" in response.headers:
                     total_size = int(response.headers["Content-Length"])
-                    if progress is not None and task_id is not None:
-                        progress.set_task_duration(task_id, total_size)
+                    progress.set_task_duration(item_id, total_size)
 
                 # Download file in chunks with progress reporting
                 downloaded_bytes = 0
@@ -77,10 +75,7 @@ class HTTPDownloader(Downloader):
                         if chunk:
                             f.write(chunk)
                             downloaded_bytes += len(chunk)
-
-                            # Update progress
-                            if progress is not None and task_id is not None:
-                                progress.update_progress(task_id, advance=len(chunk))
+                            progress.update_progress(item_id, advance=len(chunk))
 
                 log.debug(f"Successfully downloaded {uri} ({downloaded_bytes} bytes)")
                 return True
@@ -90,6 +85,7 @@ class HTTPDownloader(Downloader):
             except requests.exceptions.RequestException as e:
                 log.error(f"Request error downloading {uri} on attempt {attempt + 1}: {e}")
             except Exception as e:
+                log.exception(e)
                 log.error(f"Unexpected error downloading {uri} on attempt {attempt + 1}: {type(e)} - {e}")
 
         log.error(f"Failed to download {uri} after {self.max_retries} attempts")

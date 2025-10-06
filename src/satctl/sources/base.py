@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+
+from pyresample.geometry import AreaDefinition
+from satpy.scene import Scene
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, SearchParams
-from satctl.progress import ProgressReporter
+from satctl.model import ConversionParams, Granule, SearchParams
 from satctl.writers import Writer
 
 
@@ -22,14 +23,20 @@ class DataSource(ABC):
         self.composite = composite
 
     @abstractmethod
-    def search(self, params: SearchParams) -> list[Any]: ...
+    def search(self, params: SearchParams) -> list[Granule]: ...
+
+    @abstractmethod
+    def get(self, item_id: str) -> Granule: ...
+
+    @abstractmethod
+    def validate(self, item: Granule) -> None:
+        raise NotImplementedError()
 
     @abstractmethod
     def download(
         self,
-        items: Any,
+        items: Granule | list[Granule],
         output_dir: Path,
-        progress: ProgressReporter,
     ) -> tuple[list, list]: ...
 
     @abstractmethod
@@ -39,10 +46,13 @@ class DataSource(ABC):
         source: Path,
         output_dir: Path,
         writer: Writer,
-        progress: ProgressReporter,
         force: bool = True,
     ) -> tuple[list, list]: ...
 
     @abstractmethod
-    def validate(self, item: Any) -> None:
-        raise NotImplementedError()
+    def load_scene(
+        self,
+        source: Granule | Path | str,
+        composites: list[str] | None = None,
+        area_definition: AreaDefinition | None = None,
+    ) -> Scene: ...

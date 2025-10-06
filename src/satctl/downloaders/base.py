@@ -16,10 +16,10 @@ class Downloader(ABC):
     @abstractmethod
     def download(
         self,
-        uri: str,  # TODO is this too restrictive?
+        uri: str,
         destination: Path,
-        progress: ProgressReporter | None = None,
-        task_id: str | None = None,
+        item_id: str,
+        progress: ProgressReporter,
     ) -> bool: ...
 
     @abstractmethod

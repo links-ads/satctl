@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from pyproj import CRS
 from pyproj.exceptions import CRSError
@@ -62,3 +62,14 @@ class ProductInfo:
     level: str
     product_type: str
     acquisition_time: datetime
+
+
+@dataclass
+class Granule:
+    granule_id: str
+    source: str
+    assets: dict[str, Any]
+    info: ProductInfo
+
+    def __str__(self) -> str:
+        return f"Granule(id={self.granule_id})"

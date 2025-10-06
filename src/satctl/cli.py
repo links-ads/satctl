@@ -6,15 +6,12 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
-from satctl.config import MainSettings
-
 load_dotenv()
 app = typer.Typer(
     name="eokit",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-cfg = MainSettings()  # type: ignore
 
 
 def setup_logging(log_level: str, suppress: dict[str, list[str]] | None = None):
@@ -68,13 +65,13 @@ def download(
     output_dir = output_dir or Path("outputs/downloads")
 
     search_params = SearchParams(start=start, end=end, area=area_file)
-    reporter = create_reporter(reporter_name=progress)
+    create_reporter(reporter_name=progress)
 
     for source_name in sources:
         output_subdir = output_dir / source_name.lower()
-        source = create_source(source_name, config=cfg)
+        source = create_source(source_name)
         items = source.search(params=search_params)
-        source.download(items, output_dir=output_subdir, progress=reporter)
+        source.download(items, output_dir=output_subdir)
 
 
 @app.command()
@@ -111,13 +108,13 @@ def convert(
 
     params = ConversionParams(area=area_file, crs_data=crs)
     writer = create_writer(writer_name=writer_name)
-    reporter = create_reporter(reporter_name=reporter_name)
+    create_reporter(reporter_name=reporter_name)
 
     if "all" in sources:
         sources = registry.list()
 
     for source_name in sources:
-        source = create_source(source_name, config=cfg)
+        source = create_source(source_name)
         source_subdir = source_dir / source_name.lower()
         output_subdir = output_dir / source_name.lower()
 
@@ -127,7 +124,6 @@ def convert(
                 source=source_subdir,
                 output_dir=output_subdir,
                 writer=writer,
-                progress=reporter,
                 force=force_conversion,
             )
         else:

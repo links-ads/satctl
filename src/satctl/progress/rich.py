@@ -1,6 +1,9 @@
+from collections import namedtuple
 from typing import Any
 
 from satctl.progress import ProgressReporter
+
+TaskInfo = namedtuple("TaskInfo", ("task_id", "description"))
 
 
 class RichProgressReporter(ProgressReporter):
@@ -38,41 +41,42 @@ class RichProgressReporter(ProgressReporter):
     def start(self, total_items: int) -> None:
         self.progress.start()
         self._active = True
-        self._tasks = {}
+        self._task_info = {}
 
     def add_task(self, item_id: str, description: str) -> Any:
         task_id = self.progress.add_task(
             description=description,
             item_id=item_id,
             start=False,
-            total=None,  # Will be set when we know file size
+            total=None,  # will be set when we know file size
         )
-        self._tasks[task_id] = dict(
-            description=description,
-            item_id=item_id,
-        )
+        self._task_info[item_id] = TaskInfo(task_id=task_id, description=description)
         return task_id
 
-    def set_task_duration(self, task: Any, total: int) -> None:
+    def set_task_duration(self, item_id: str, total: int) -> None:
         """Set total size for a task (when we get Content-Length)."""
         if self._active:
-            self.progress.update(task, total=total)
-            self.progress.start_task(task)
+            task_id = self._task_info[item_id].task_id
+            self.progress.update(task_id=task_id, total=total)
+            self.progress.start_task(task_id=task_id)
 
-    def update_progress(self, task: Any, advance: int | None = None, description: str | None = None) -> None:
+    def update_progress(self, item_id: str, advance: int | None = None, description: str | None = None) -> None:
         if self._active:
-            self.progress.update(task, advance=advance, description=description)
-            if description is not None:
-                self._tasks[task]["description"] = description
+            task_info = self._task_info[item_id]
+            if description and description != task_info.description:
+                task_info = TaskInfo(task_id=task_info.task_id, description=description)
+                self._task_info[item_id] = task_info
+            self.progress.update(task_id=task_info.task_id, advance=advance, description=task_info.description)
 
-    def end_task(self, task: Any, success: bool, description: str | None = None) -> None:
+    def end_task(self, item_id: str, success: bool, description: str | None = None) -> None:
         if self._active:
             status = "✓" if success else "✗"
-            description = description or self._tasks[task]["description"]
-            self.progress.update(task, description=f"{status} {description}")
+            task_info = self._task_info[item_id]
+            description = description or task_info.description
+            self.progress.update(task_id=task_info.task_id, description=f"{status} {description}")
 
     def stop(self) -> None:
         if self._active:
             self.progress.stop()
             self._active = False
-            self._tasks.clear()
+            self._task_info.clear()

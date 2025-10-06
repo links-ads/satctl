@@ -64,7 +64,7 @@ def extract_zip(
 
         total_size = sum(f.file_size for f in zip_ref.infolist() if not f.is_dir())
         if progress is not None and task_id is not None:
-            progress.set_task_duration(task=task_id, total=total_size)
+            progress.set_task_duration(item_id=task_id, total=total_size)
 
         for info in zip_ref.infolist():
             if info.is_dir() or progress is None or task_id is None:

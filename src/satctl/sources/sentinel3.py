@@ -6,15 +6,14 @@ from abc import abstractmethod
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
-from pystac import Item
+from pyresample.geometry import AreaDefinition
 from pystac_client import Client
 from satpy.scene import Scene
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, ProductInfo, SearchParams
-from satctl.progress import ProgressReporter
+from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
+from satctl.progress import get_reporter
 from satctl.sources import DataSource
 from satctl.utils import area_def_from_geometry, extract_zip
 from satctl.writers import Writer
@@ -52,11 +51,37 @@ class Sentinel3Source(DataSource):
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
 
-    def validate(self, item: Item) -> None:
-        """Validates a S3 STAC item.
+    def search(self, params: SearchParams) -> list[Granule]:
+        log.debug("Setting up the STAC client")
+        catalogue = Client.open(self.stac_url)
+
+        log.debug("Searching catalog")
+        search = catalogue.search(
+            collections=self.collections,
+            intersects=params.area_geometry,
+            datetime=(params.start, params.end),
+            limit=self.search_limit,
+        )
+        items = [
+            Granule(
+                granule_id=i.id,
+                source=self.collections[0],
+                assets=i.assets,
+                info=self._parse_item_name(i.id),
+            )
+            for i in search.items()
+        ]
+        log.debug("Found %d items", len(items))
+        return items
+
+    def get(self, item_id: str) -> Granule:
+        raise NotImplementedError()
+
+    def validate(self, item: Granule) -> None:
+        """Validates a Sentinel3 STAC item.
 
         Args:
-            item (Item): STAC item to validate
+            item (Granule): STAC item to validate
         """
         for name, asset in item.assets.items():
             # We expect zips, netcdfs, xfdumanifest.xml and thumbnail.jpg
@@ -68,26 +93,10 @@ class Sentinel3Source(DataSource):
             if asset.media_type == "application/xml":
                 assert name == "xfdumanifest"
 
-    def search(self, params: SearchParams) -> list[Any]:
-        log.debug("Setting up the STAC client")
-        catalogue = Client.open(self.stac_url)
-
-        log.debug("Searching catalog")
-        search = catalogue.search(
-            collections=self.collections,
-            intersects=params.area_geometry,
-            datetime=(params.start, params.end),
-            limit=self.search_limit,
-        )
-        items = list(search.items())
-        log.debug("Found %d items", len(items))
-        return items
-
     def download(
         self,
-        items: Item | list[Item],
+        items: Granule | list[Granule],
         output_dir: Path,
-        progress: ProgressReporter,
     ) -> tuple[list, list]:
         # check output folder exists, make sure items is iterable
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -96,26 +105,27 @@ class Sentinel3Source(DataSource):
 
         success = []
         failure = []
+        progress = get_reporter()
         progress.start(total_items=len(items))
         self.downloader.init()
         try:
             for item in items:
                 self.validate(item)
                 zip_asset = item.assets["product"]
-                local_filename = f"{item.id}.zip"
+                local_filename = f"{item.granule_id}.zip"
                 local_path = output_dir / local_filename
 
-                task_id = progress.add_task(item_id=item.id, description="download")
+                progress.add_task(item_id=item.granule_id, description="download")
                 if downloaded := self.downloader.download(
                     uri=zip_asset.href,
                     destination=local_path,
+                    item_id=item.granule_id,
                     progress=progress,
-                    task_id=task_id,
                 ):
                     success.append(zip_asset)
                 else:
                     failure.append(zip_asset)
-                progress.end_task(task=task_id, success=downloaded)
+                progress.end_task(item_id=item.granule_id, success=downloaded)
 
         except KeyboardInterrupt:
             log.info("Interrupted, exiting download")
@@ -125,13 +135,20 @@ class Sentinel3Source(DataSource):
             self.downloader.close()
         return success, failure
 
+    def load_scene(
+        self,
+        source: Granule | Path | str,
+        composites: list[str] | None = None,
+        area_definition: AreaDefinition | None = None,
+    ) -> Scene:
+        raise NotImplementedError()
+
     def convert(
         self,
         params: ConversionParams,
         source: Path,
         output_dir: Path,
         writer: Writer,
-        progress: ProgressReporter,
         force: bool = False,
     ) -> tuple[list, list]:
         assert source.exists(), f"Invalid source file or directory: {source}"
@@ -151,6 +168,7 @@ class Sentinel3Source(DataSource):
 
         success = []
         failure = []
+        progress = get_reporter()
         progress.start(total_items=len(zip_files))
 
         try:
@@ -162,10 +180,10 @@ class Sentinel3Source(DataSource):
                     output_filename = f"{zip_file.stem}.tif"
                     output_filepath = output_dir / output_filename
 
-                    task_id = progress.add_task(item_id=zip_file.stem, description="extract")
+                    progress.add_task(item_id=zip_file.stem, description="extract")
                     if output_filepath.exists() and not force:
                         log.debug("Output file %s already exists, skipping", output_filename)
-                        progress.end_task(task=task_id, success=True)
+                        progress.end_task(item_id=zip_file.stem, success=True)
                         continue
 
                     try:
@@ -174,12 +192,12 @@ class Sentinel3Source(DataSource):
                             temp_path,
                             expected_dir=f"{zip_file.stem}.SEN3",
                             progress=progress,
-                            task_id=task_id,
+                            task_id=zip_file.stem,
                         )
                     except Exception as e:
                         # in case of errors, skip to the next file
                         log.error("Could not extract %s: %s", zip_file.name, str(e))
-                        progress.end_task(task=task_id, success=False)
+                        progress.end_task(item_id=zip_file.stem, success=False)
                         failure.append(zip_file)
                         continue
 
@@ -192,7 +210,7 @@ class Sentinel3Source(DataSource):
                     resampled = scene.resample(area_def, datasets=datasets, resampler="nearest")  # type: ignore
 
                     log.debug("Saving to: %s", output_filepath)
-                    progress.update_progress(task=task_id, description="writing")
+                    progress.update_progress(item_id=zip_file.stem, description="writing")
                     if written := writer.write(
                         scene=resampled,
                         output_path=output_filepath,
@@ -201,7 +219,7 @@ class Sentinel3Source(DataSource):
                         success.append(zip_file)
                     else:
                         failure.append(zip_file)
-                    progress.end_task(task=task_id, success=written)
+                    progress.end_task(item_id=zip_file.stem, success=written)
 
         except KeyboardInterrupt:
             log.info("Interrupted, exiting conversion")
@@ -273,9 +291,6 @@ class OLCISource(Sentinel3Source):
             download_pool_conns=download_pool_conns,
             download_pool_size=download_pool_size,
         )
-
-    def _get_composite(self, item_info: ProductInfo) -> str:
-        return "all_bands_raw"
 
     def _parse_item_name(self, name: str) -> ProductInfo:
         pattern = r"S3([AB])_OL_(\d)_(\w+)____(\d{8}T\d{6})"
