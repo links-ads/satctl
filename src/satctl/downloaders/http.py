@@ -4,9 +4,10 @@ from pathlib import Path
 import requests
 from requests.adapters import HTTPAdapter
 
-from satctl.auth.base import Authenticator
+from satctl.auth import Authenticator
 from satctl.downloaders.base import Downloader
-from satctl.progress import ProgressReporter
+from satctl.model import ProgressEventType
+from satctl.progress.events import emit_event
 
 log = logging.getLogger(__name__)
 
@@ -30,20 +31,26 @@ class HTTPDownloader(Downloader):
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
 
-    def init(self) -> None:
-        self.session = requests.Session()
-        adapter = HTTPAdapter(pool_connections=self.pool_conns, pool_maxsize=self.pool_size)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
+    def init(self, session: requests.Session | None = None) -> None:
+        if not session:
+            session = requests.Session()
+            adapter = HTTPAdapter(pool_connections=self.pool_conns, pool_maxsize=self.pool_size)
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+        self.session = session
 
     def download(
         self,
         uri: str,
         destination: Path,
-        item_id: str,
-        progress: ProgressReporter,
+        task_id: str,
     ) -> bool:
-        """Download file from HTTP URL with retries and progress reporting."""
+        """
+        Download file from HTTP URL with retries and progress reporting.
+        """
+        error = ""
+        log.debug("Downloading resource %s into: %s", uri, destination)
+        emit_event(ProgressEventType.TASK_CREATED, task_id=task_id, description="download")
         for attempt in range(self.max_retries):
             try:
                 # Ensure we have authentication
@@ -66,7 +73,7 @@ class HTTPDownloader(Downloader):
                 total_size = None
                 if "Content-Length" in response.headers:
                     total_size = int(response.headers["Content-Length"])
-                    progress.set_task_duration(item_id, total_size)
+                    emit_event(ProgressEventType.TASK_DURATION, task_id=task_id, duration=total_size)
 
                 # Download file in chunks with progress reporting
                 downloaded_bytes = 0
@@ -75,20 +82,27 @@ class HTTPDownloader(Downloader):
                         if chunk:
                             f.write(chunk)
                             downloaded_bytes += len(chunk)
-                            progress.update_progress(item_id, advance=len(chunk))
+                            emit_event(ProgressEventType.TASK_PROGRESS, task_id=task_id, advance=len(chunk))
 
+                emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
                 log.debug(f"Successfully downloaded {uri} ({downloaded_bytes} bytes)")
                 return True
 
             except requests.exceptions.Timeout:
-                log.warning(f"Timeout downloading {uri} on attempt {attempt + 1}")
+                log.debug(f"Timeout downloading {uri} on attempt {attempt + 1}")
+                error = "timed out"
             except requests.exceptions.RequestException as e:
-                log.error(f"Request error downloading {uri} on attempt {attempt + 1}: {e}")
+                log.debug(f"Request error downloading {uri} on attempt {attempt + 1}: {e}")
+                error = "exception request"
             except Exception as e:
-                log.exception(e)
-                log.error(f"Unexpected error downloading {uri} on attempt {attempt + 1}: {type(e)} - {e}")
-
-        log.error(f"Failed to download {uri} after {self.max_retries} attempts")
+                log.warning(f"Unexpected error downloading {uri} on attempt {attempt + 1}: {type(e)} - {e}")
+                error = str(e)
+        emit_event(
+            ProgressEventType.TASK_COMPLETED,
+            task_id=task_id,
+            success=False,
+            description=f"failed: {error}",
+        )
         return False
 
     def close(self) -> None:

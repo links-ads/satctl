@@ -1,15 +1,18 @@
+import logging
 import zipfile
 from functools import partial
 from pathlib import Path
 from shutil import copyfileobj
-from typing import IO, Any, Callable
+from typing import IO, Callable
 
 from pyproj import CRS, Transformer
 from pyresample import create_area_def
 from pyresample.geometry import AreaDefinition, DynamicAreaDefinition
 from shapely import Polygon
 
+from satctl.model import ProgressEventType
 from satctl.progress import ProgressReporter
+from satctl.progress.events import emit_event
 
 
 class IOProgressWrapper:
@@ -36,18 +39,39 @@ class IOProgressWrapper:
         return data
 
 
-def convert_crs(value: str | CRS) -> CRS:
-    if not isinstance(value, CRS):
-        return CRS.from_string(value)
-    return value
+def setup_logging(
+    log_level: str,
+    reporter_cls: type[ProgressReporter] | None,
+    suppressions: dict[str, list[str]] | None = None,
+) -> None:
+    """Configure logging, optionally using the reporter's configuration.
+
+    Args:
+        log_level (str): which log level (e.g., DEBUG, INFO, WARNING).
+        reporter_cls (type[ProgressReporter] | None): Optional reporter class to get the config from.
+        suppressions (dict[str, list[str]] | None, optional): Additional user-provided suppressions. Defaults to None.
+    """
+    config = reporter_cls.logging_config() if reporter_cls else ProgressReporter.logging_config()
+    suppressions = suppressions or {}
+    # apply config
+    logging.basicConfig(
+        level=log_level.upper(),
+        format=config.format,
+        handlers=config.handlers,
+        force=True,  # reconfigure if already configured
+    )
+    # apply suppressions by level
+    for level_name, loggers in suppressions.items():
+        suppress_level = getattr(logging, level_name.upper())
+        for logger_name in loggers:
+            logging.getLogger(logger_name).setLevel(suppress_level)
 
 
 def extract_zip(
     zip_path: Path,
     extract_to: Path,
+    item_id: str,
     expected_dir: str | None = None,
-    progress: ProgressReporter | None = None,
-    task_id: Any | None = None,
 ) -> Path:
     """Extract zip file and return path to extracted directory.
 
@@ -63,18 +87,20 @@ def extract_zip(
         # zip_ref.extractall(extract_to)
 
         total_size = sum(f.file_size for f in zip_ref.infolist() if not f.is_dir())
-        if progress is not None and task_id is not None:
-            progress.set_task_duration(item_id=task_id, total=total_size)
+        emit_event(ProgressEventType.TASK_DURATION, task_id=item_id, duration=total_size)
 
         for info in zip_ref.infolist():
-            if info.is_dir() or progress is None or task_id is None:
+            if info.is_dir():
                 zip_ref.extract(info, extract_to)
             else:
                 file_path = extract_to / info.filename
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 with zip_ref.open(info) as in_file, open(str(file_path), "wb") as out_file:
                     copyfileobj(
-                        IOProgressWrapper(callback=partial(progress.update_progress, task_id), stream=in_file),
+                        IOProgressWrapper(
+                            callback=partial(emit_event, ProgressEventType.TASK_PROGRESS, item_id),
+                            stream=in_file,
+                        ),
                         out_file,
                     )
 

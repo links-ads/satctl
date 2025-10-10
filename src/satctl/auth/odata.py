@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import requests
 
@@ -89,14 +90,22 @@ class ODataAuthenticator(Authenticator):
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        """Get headers with Bearer token for authenticated requests"""
+        """
+        Get headers with Bearer token for authenticated requests
+        """
         if not self.access_token:
             if not self.authenticate():
                 raise RuntimeError("Failed to authenticate with Copernicus")
         return {"Authorization": f"Bearer {self.access_token}"}
 
+    @property
+    def auth_session(self) -> Any:
+        return None
+
     def ensure_authenticated(self, refresh: bool = False) -> bool:
-        """Ensure we have a valid access token"""
+        """
+        Ensure we have a valid access token
+        """
         if not self.access_token:
             return self.authenticate()
         if refresh:

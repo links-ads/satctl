@@ -1,21 +1,23 @@
 import logging
 import re
-import tempfile
+import uuid
 import warnings
 from abc import abstractmethod
+from collections import defaultdict
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
-from pyresample.geometry import AreaDefinition
 from pystac_client import Client
-from satpy.scene import Scene
+from xarray import DataArray
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
-from satctl.progress import get_reporter
+from satctl.model import ConversionParams, Granule, ProductInfo, ProgressEventType, SearchParams
+from satctl.progress.events import emit_event
 from satctl.sources import DataSource
-from satctl.utils import area_def_from_geometry, extract_zip
+from satctl.utils import extract_zip
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
@@ -29,17 +31,19 @@ class Sentinel3Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        composite: str,
         downloader: Downloader,
         stac_url: str,
+        default_composite: str | None = None,
+        default_resolution: int | None = None,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
         super().__init__(
             collection_name,
-            composite=composite,
             downloader=downloader,
+            default_composite=default_composite,
+            default_resolution=default_resolution,
         )
         self.reader = reader
         self.stac_url = stac_url
@@ -74,8 +78,13 @@ class Sentinel3Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    def get(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str) -> Granule:
         raise NotImplementedError()
+
+    def get_files(self, item: Granule) -> list[Path | str]:
+        if item.local_path is None:
+            raise ValueError("Local path is missing. Did you download this granule?")
+        return list(item.local_path.glob("*"))
 
     def validate(self, item: Granule) -> None:
         """Validates a Sentinel3 STAC item.
@@ -93,138 +102,201 @@ class Sentinel3Source(DataSource):
             if asset.media_type == "application/xml":
                 assert name == "xfdumanifest"
 
+    def download_item(self, item: Granule, destination: Path) -> bool:
+        """Download single item - can be called in thread pool."""
+        self.validate(item)
+        zip_asset = item.assets["product"]
+        local_file = destination / f"{item.granule_id}.zip"
+        if result := self.downloader.download(
+            uri=zip_asset.href,
+            destination=local_file,
+            task_id=item.granule_id,
+        ):
+            # extract to uniform with other sources
+            local_path = extract_zip(
+                zip_path=local_file,
+                extract_to=destination,
+                item_id=item.granule_id,
+                expected_dir=f"{item.granule_id}.SEN3",
+            )
+            item.local_path = local_path
+            # delete the redundant zip file
+            local_file.unlink()
+        return result
+
     def download(
         self,
         items: Granule | list[Granule],
-        output_dir: Path,
+        destination: Path,
+        num_workers: int | None = None,
     ) -> tuple[list, list]:
         # check output folder exists, make sure items is iterable
-        output_dir.mkdir(parents=True, exist_ok=True)
+        destination.mkdir(parents=True, exist_ok=True)
         if not isinstance(items, Iterable):
             items = [items]
+        items = cast(list, items)
 
         success = []
         failure = []
-        progress = get_reporter()
-        progress.start(total_items=len(items))
+        num_workers = num_workers or 1
+        batch_id = str(uuid.uuid4())
+        emit_event(
+            ProgressEventType.BATCH_STARTED,
+            task_id=batch_id,
+            total_items=len(items),
+            description=self.collections[0],
+        )
         self.downloader.init()
+        executor = None
         try:
-            for item in items:
-                self.validate(item)
-                zip_asset = item.assets["product"]
-                local_filename = f"{item.granule_id}.zip"
-                local_path = output_dir / local_filename
-
-                progress.add_task(item_id=item.granule_id, description="download")
-                if downloaded := self.downloader.download(
-                    uri=zip_asset.href,
-                    destination=local_path,
-                    item_id=item.granule_id,
-                    progress=progress,
-                ):
-                    success.append(zip_asset)
-                else:
-                    failure.append(zip_asset)
-                progress.end_task(item_id=item.granule_id, success=downloaded)
-
-        except KeyboardInterrupt:
-            log.info("Interrupted, exiting download")
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
+                for future in as_completed(future2item):
+                    item = future2item[future]
+                    if future.result():
+                        success.append(item)
+                    else:
+                        failure.append(item)
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
             return success, failure
+        except KeyboardInterrupt:
+            log.info("Interrupted, cleaning up...")
+            if executor:
+                executor.shutdown(wait=False, cancel_futures=True)
         finally:
-            progress.stop()
-            self.downloader.close()
-        return success, failure
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            return success, failure
 
-    def load_scene(
+    def save_item(
         self,
-        source: Granule | Path | str,
-        composites: list[str] | None = None,
-        area_definition: AreaDefinition | None = None,
-    ) -> Scene:
-        raise NotImplementedError()
-
-    def convert(
-        self,
-        params: ConversionParams,
-        source: Path,
-        output_dir: Path,
+        item: Granule,
+        destination: Path,
         writer: Writer,
+        params: ConversionParams,
+        force: bool = False,
+    ) -> dict[str, list]:
+        if item.local_path is None or not item.local_path.exists():
+            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
+        if params.datasets is None or self.default_composite is None:
+            raise ValueError("Missing datasets or default composite for storage")
+
+        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
+        log.debug("Attempting to save the following datasets: %s", datasets_dict)
+        # if not forced or already present,
+        # remove existing files from the process before loading scene
+        if not force:
+            for dataset_name, file_name in list(datasets_dict.items()):
+                if (destination / item.granule_id / f"{file_name}.{writer.extension}").exists():
+                    del datasets_dict[dataset_name]
+
+        files = self.get_files(item)
+        log.debug("Found %d files to process", len(files))
+
+        log.debug("Loading and resampling scene")
+        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+        # if user does not provide an AoI, we use the entire granule extent
+        # similarly, if a user does not provide: source CRS, resolution, datasets,
+        # `define_area` will assume some sane defaults (4326, default_res or finest, default_composite)
+        if params.area_geometry is not None:
+            area_def = self.define_area(
+                target_crs=params.target_crs_obj,
+                area=params.area_geometry,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+        else:
+            area_def = self.define_area(
+                target_crs=params.target_crs_obj,
+                scene=scene,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+        scene = self.resample(scene, area_def=area_def)
+
+        paths: dict[str, list] = defaultdict(list)
+        output_dir = destination / item.granule_id
+        output_dir.mkdir(exist_ok=True, parents=True)
+        for dataset_name, file_name in datasets_dict.items():
+            output_path = output_dir / f"{file_name}.{writer.extension}"
+            paths[item.granule_id].append(
+                writer.write(
+                    dataset=cast(DataArray, scene[dataset_name]),
+                    output_path=output_path,
+                )
+            )
+        return paths
+
+    def save(
+        self,
+        items: Granule | list[Granule],
+        params: ConversionParams,
+        destination: Path,
+        writer: Writer,
+        num_workers: int | None = None,
         force: bool = False,
     ) -> tuple[list, list]:
-        assert source.exists(), f"Invalid source file or directory: {source}"
-        zip_files = list(source.glob("*.zip")) if source.is_dir() else [source]
-        assert zip_files, f"No zip files found for: {source}"
-
-        log.debug("Found %d files to process", len(zip_files))
-        output_dir.mkdir(exist_ok=True, parents=True)
-
-        log.debug("Creating area definition")
-        area_def = area_def_from_geometry(
-            name=f"aoi_{self.reader}",
-            area=params.area_geometry,  # type: ignore
-            target_crs=params.crs,
-            resolution=500,
-        )
+        if not isinstance(items, Iterable):
+            items = [items]
+        items = cast(list, items)
 
         success = []
         failure = []
-        progress = get_reporter()
-        progress.start(total_items=len(zip_files))
-
+        num_workers = num_workers or 1
+        batch_id = str(uuid.uuid4())
+        emit_event(
+            ProgressEventType.BATCH_STARTED,
+            task_id=batch_id,
+            total_items=len(items),
+            description=self.source_name,
+        )
+        executor = None
         try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
-                log.debug("Using temporary directory: %s", temp_dir)
-
-                for zip_file in zip_files:
-                    output_filename = f"{zip_file.stem}.tif"
-                    output_filepath = output_dir / output_filename
-
-                    progress.add_task(item_id=zip_file.stem, description="extract")
-                    if output_filepath.exists() and not force:
-                        log.debug("Output file %s already exists, skipping", output_filename)
-                        progress.end_task(item_id=zip_file.stem, success=True)
-                        continue
-
-                    try:
-                        item_dir = extract_zip(
-                            zip_file,
-                            temp_path,
-                            expected_dir=f"{zip_file.stem}.SEN3",
-                            progress=progress,
-                            task_id=zip_file.stem,
-                        )
-                    except Exception as e:
-                        # in case of errors, skip to the next file
-                        log.error("Could not extract %s: %s", zip_file.name, str(e))
-                        progress.end_task(item_id=zip_file.stem, success=False)
-                        failure.append(zip_file)
-                        continue
-
-                    log.debug("Loading scene")
-                    scene = Scene(filenames=item_dir.glob("*"), reader=self.reader)
-                    datasets = [self.composite]
-                    scene.load(datasets)
-
-                    log.debug("Resampling to target area definition")
-                    resampled = scene.resample(area_def, datasets=datasets, resampler="nearest")  # type: ignore
-
-                    log.debug("Saving to: %s", output_filepath)
-                    progress.update_progress(item_id=zip_file.stem, description="writing")
-                    if written := writer.write(
-                        scene=resampled,
-                        output_path=output_filepath,
-                        composite=self.composite,
-                    ):
-                        success.append(zip_file)
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future2item = {
+                    executor.submit(
+                        self.save_item,
+                        item,
+                        destination,
+                        writer,
+                        params,
+                        force,
+                    ): item
+                    for item in items
+                }
+                for future in as_completed(future2item):
+                    item = future2item[future]
+                    if future.result():
+                        success.append(item)
                     else:
-                        failure.append(zip_file)
-                    progress.end_task(item_id=zip_file.stem, success=written)
-
+                        failure.append(item)
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            return success, failure
         except KeyboardInterrupt:
-            log.info("Interrupted, exiting conversion")
+            log.info("Interruped, cleaning up...")
+            if executor:
+                executor.shutdown(wait=False, cancel_futures=True)
         finally:
-            progress.stop()
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
             return success, failure
 
 
@@ -244,7 +316,7 @@ class SLSTRSource(Sentinel3Source):
         super().__init__(
             "sentinel-3-sl-1-rbt-ntc",
             reader="slstr_l1b",
-            composite=composite,
+            default_composite=composite,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,
@@ -284,7 +356,7 @@ class OLCISource(Sentinel3Source):
         super().__init__(
             "sentinel-3-olci-1-efr-ntc",
             reader="olci_l1b",
-            composite=composite,
+            default_composite=composite,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,

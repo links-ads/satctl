@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from satctl.auth import Authenticator
-from satctl.progress import ProgressReporter
 
 
 class Downloader(ABC):
@@ -18,8 +17,7 @@ class Downloader(ABC):
         self,
         uri: str,
         destination: Path,
-        item_id: str,
-        progress: ProgressReporter,
+        task_id: str,
     ) -> bool: ...
 
     @abstractmethod

@@ -1,64 +1,69 @@
 from abc import ABC, abstractmethod
-from contextvars import ContextVar
-from typing import Any
+from dataclasses import dataclass
+from logging import Handler
 
-_current_reporter: ContextVar["ProgressReporter | None"] = ContextVar("progress_reporter", default=None)
-
-
-def get_reporter() -> "ProgressReporter":
-    reporter = _current_reporter.get()
-    if reporter is None:
-        reporter = EmptyReporter()
-        set_reporter(reporter)
-    return reporter
+from satctl.model import ProgressEvent
+from satctl.progress.events import get_bus
 
 
-def set_reporter(reporter: "ProgressReporter") -> None:
-    _current_reporter.set(reporter)
+@dataclass
+class LoggingConfig:
+    handlers: list[Handler] | None
+    format: str
 
 
 class ProgressReporter(ABC):
-    @abstractmethod
-    def start(self, total_items: int) -> None: ...
+    @classmethod
+    def logging_config(cls) -> LoggingConfig:
+        """Provide a custom configuration for the logging module.
+        The current implementation allows for barebone logs, subclasses
+        should extend this method to customize the output (e.g., optional
+        rich logs).
+
+        Returns:
+            LoggingConfig: logging configuration parameters.
+        """
+        return LoggingConfig(handlers=None, format="%(message)s")
 
     @abstractmethod
-    def add_task(self, item_id: str, description: str) -> Any: ...
+    def start(self) -> None:
+        get_bus().subscribe(self.handle_event)
 
     @abstractmethod
-    def set_task_duration(self, item_id: str, total: int) -> None: ...
+    def stop(self) -> None:
+        get_bus().unsubscribe(self.handle_event)
 
-    @abstractmethod
-    def update_progress(self, item_id: str, advance: int | None = None, description: str | None = None) -> None: ...
+    def handle_event(self, event: ProgressEvent) -> None:
+        """Dispatch-like function that tries to find a specific function to handle the given event enum.
+        The base reporter intentionally implements empty handlers to allow for overriding only the necessary function.
 
-    @abstractmethod
-    def end_task(self, item_id: str, success: bool, description: str | None = None) -> None: ...
+        Args:
+            event (ProgressEvent): generic event derived from the event bus.
 
-    @abstractmethod
-    def stop(self) -> None: ...
+        Raises:
+            ValueError: when to handler has been found. Should happen only in case of event type customization.
+        """
+        event_handler_name = f"on_{event.type.value}"
+        event_handler_fn = getattr(self, event_handler_name, None)
+        if event_handler_fn is None:
+            raise ValueError(f"No handler for event: {event.type.value}")
+        event_handler_fn(event)
 
-    def cleanup(self) -> None:
-        self.stop()
-        _current_reporter.set(None)
+    def on_batch_started(self, event: ProgressEvent): ...
+
+    def on_batch_completed(self, event: ProgressEvent): ...
+
+    def on_task_created(self, event: ProgressEvent): ...
+
+    def on_task_duration(self, event: ProgressEvent): ...
+
+    def on_progress(self, event: ProgressEvent): ...
+
+    def task_completed(self, event: ProgressEvent): ...
 
 
-class EmptyReporter(ProgressReporter):
-    """
-    Empty reporter to avoid continuos checks against None
-    """
-
-    def start(self, total_items: int) -> None:
-        pass
-
-    def add_task(self, item_id: str, description: str) -> Any:
-        pass
-
-    def set_task_duration(self, item_id: str, total: int) -> None:
-        pass
-
-    def update_progress(self, item_id: str, advance: int | None = None, description: str | None = None) -> None:
-        pass
-
-    def end_task(self, item_id: str, success: bool, description: str | None = None) -> None:
+class EmptyProgressReporter(ProgressReporter):
+    def start(self) -> None:
         pass
 
     def stop(self) -> None:

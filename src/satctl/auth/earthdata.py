@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any
+from typing import Any, Literal
 
 import earthaccess
 
@@ -12,86 +12,69 @@ log = logging.getLogger(__name__)
 class EarthDataAuthenticator(Authenticator):
     """Handles authentication for NASA Earthdata using earthaccess library."""
 
+    ENV_USER_NAME = "EARTHDATA_USERNAME"
+    ENV_PASS_NAME = "EARTHDATA_PASSWORD"
+
     def __init__(
         self,
-        strategy: str = "environment",
+        strategy: Literal["environment", "interactive", "netrc"] = "environment",
         username: str | None = None,
         password: str | None = None,
+        mode: Literal["requests_https", "fsspec_https", "s3fs"] = "requests_https",
     ):
-        """
-        Initialize EarthData authenticator.
+        """Authenticates the user on EarthData using earthaccess.
 
         Args:
-            strategy: Authentication strategy ('environment', 'interactive', 'netrc')
-            username: Optional username (if not using environment strategy)
-            password: Optional password (if not using environment strategy)
+            strategy (["environment", "interactive", "netrc"], optional): Authentication strategy. Defaults to "environment".
+            username (str | None, optional): Username to inject. Defaults to None.
+            password (str | None, optional): Password to inject. Defaults to None.
+            mode (["https", "fsspec", "s3"], optional): session mode to be returned. Defaults to https.
+
+        Raises:
+            ValueError: validation might fail.
         """
         self.strategy = strategy
-        self.username = username
-        self.password = password
-        self._authenticated = False
-        self._auth_session: Any = None
-
-        # Validate environment variables if using environment strategy
+        self.mode = mode
+        self._auth = None
+        self.username = None
+        self.password = None
+        # ensure credentials are provided with environment strategy
         if strategy == "environment":
-            username_env = os.getenv("EARTHDATA_USERNAME")
-            password_env = os.getenv("EARTHDATA_PASSWORD")
-            if not username_env or not password_env:
+            self.username = username or os.getenv(self.ENV_USER_NAME)
+            self.password = password or os.getenv(self.ENV_PASS_NAME)
+            if not self.username or not self.password:
                 raise ValueError(
-                    "EARTHDATA_USERNAME and EARTHDATA_PASSWORD environment variables must be set "
+                    f"{self.ENV_USER_NAME} and {self.ENV_PASS_NAME} environment variables must be set "
                     "when using 'environment' strategy"
                 )
+            os.environ[self.ENV_USER_NAME] = self.username
+            os.environ[self.ENV_PASS_NAME] = self.password
 
     def authenticate(self) -> bool:
-        """Authenticate with NASA Earthdata using earthaccess."""
-        try:
-            if self.strategy == "environment":
-                log.debug("Authenticating with earthaccess using environment strategy")
-                self._auth_session = earthaccess.login(strategy="environment")
-            elif self.strategy == "interactive":
-                log.debug("Authenticating with earthaccess using interactive strategy")
-                self._auth_session = earthaccess.login()
-            elif self.strategy == "netrc":
-                log.debug("Authenticating with earthaccess using netrc strategy")
-                self._auth_session = earthaccess.login(strategy="netrc")
-            else:
-                raise ValueError(f"Unsupported authentication strategy: {self.strategy}")
-
-            self._authenticated = True
-            log.info("Successfully authenticated with NASA Earthdata")
-            return True
-
-        except Exception as e:
-            log.error(f"Authentication failed: {e}")
-            self._authenticated = False
-            self._auth_session = None
-            return False
+        log.debug("Authenticating to earthaccess using strategy: %s", self.strategy)
+        self._auth = earthaccess.login(strategy=self.strategy)
+        return self._auth.authenticated
 
     def ensure_authenticated(self, refresh: bool = False) -> bool:
         """Ensure we have valid authentication with NASA Earthdata."""
-        if not self._authenticated or refresh:
+        if not self._auth or not self._auth.authenticated or refresh:
             return self.authenticate()
-        return True
+        return self._auth.authenticated
 
     @property
     def auth_headers(self) -> dict[str, str]:
         """
-        Get authentication headers.
-
         Note: earthaccess handles authentication internally,
         so we don't need to provide explicit headers.
-        This returns empty dict since earthaccess manages session cookies.
+        TODO: evaluate whether some other headers might be needed.
         """
-        if not self.ensure_authenticated():
-            raise RuntimeError("Failed to authenticate with NASA Earthdata")
-
-        # earthaccess handles authentication internally via session cookies
-        # so we don't need to provide explicit authorization headers
+        self.ensure_authenticated()
         return {}
 
     @property
     def auth_session(self) -> Any:
-        """Get the earthaccess authentication session."""
-        if not self.ensure_authenticated():
-            raise RuntimeError("Failed to authenticate with NASA Earthdata")
-        return self._auth_session
+        self.ensure_authenticated()
+        session_name = f"get_{self.mode}_session"
+        if not hasattr(earthaccess, session_name):
+            raise ValueError(f"earthaccess does not support mode: {self.mode}")
+        return getattr(earthaccess, session_name)()
