@@ -52,6 +52,9 @@ def download(
         Path | None,
         typer.Option("--output-dir", "-o", help="Path to where the outputs will be stored"),
     ] = None,
+    num_workers: Annotated[
+        int | None, typer.Option("--num-workers", "-nw", help="Workers count for parallel processing")
+    ] = None,
 ):
     from satctl.model import SearchParams
     from satctl.sources import create_source, registry
@@ -66,7 +69,7 @@ def download(
         output_subdir = output_dir / source_name.lower()
         source = create_source(source_name)
         items = source.search(params=search_params)
-        source.download(items, destination=output_subdir)
+        source.download(items, destination=output_subdir, num_workers=num_workers)
 
 
 @app.command()
@@ -87,6 +90,9 @@ def convert(
     datasets: Annotated[
         list[str] | None, typer.Option("--datasets", "-d", help="List of satpy datasets (or composites) to save")
     ] = None,
+    resolution: Annotated[
+        int | None, typer.Option("--resolution", "-r", help="Custom output resolution for the raw inputs")
+    ] = None,
     force_conversion: Annotated[
         bool, typer.Option("--force-conversion", "-f", help="Execute also on already processed files")
     ] = False,
@@ -103,9 +109,18 @@ def convert(
     init_reporter()
 
     if area_file is not None:
-        params = ConversionParams.from_file(path=area_file, target_crs=crs)
+        params = ConversionParams.from_file(
+            path=area_file,
+            target_crs=crs,
+            datasets=datasets,
+            resolution=resolution,
+        )
     else:
-        params = ConversionParams(target_crs=crs)
+        params = ConversionParams(
+            target_crs=crs,
+            datasets=datasets,
+            resolution=resolution,
+        )
     writer = create_writer(writer_name=writer_name)
 
     if "all" in sources:
@@ -127,3 +142,7 @@ def convert(
             )
         else:
             typer.echo(f"Warning: No data found for {source_name} in {source_subdir}")
+
+
+if __name__ == "__main__":
+    app()

@@ -1,15 +1,16 @@
+import json
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, cast
 
-from geojson_pydantic import Feature
-from pydantic import BaseModel, BeforeValidator, ValidationError, model_validator
+from geojson_pydantic import Feature, FeatureCollection
+from pydantic import BaseModel, BeforeValidator, model_validator
 from pyproj import CRS
 from pyproj.exceptions import CRSError
-from shapely import Polygon, from_geojson
-from shapely.geometry import shape
+from shapely import GeometryCollection, Polygon, from_geojson
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 
 
 def convert_to_geojson(value: Any) -> Any:
@@ -31,24 +32,22 @@ def validate_crs(value: Any) -> Any:
         CRS.from_string(value)
         return value
     except CRSError:
-        raise ValidationError(f"Invalid CRS: {value}")
+        raise ValueError(f"Invalid CRS: {value}")
 
 
 class AreaParams(BaseModel):
     """Store the actual geometry, not the path to it."""
 
-    area: Annotated[Feature | None, BeforeValidator(convert_to_geojson)] = None
+    area: Annotated[Feature | FeatureCollection | None, BeforeValidator(convert_to_geojson)] = None
 
     @classmethod
     def _load_geometry(cls, path: Path) -> dict:
         if path is None:
-            raise ValidationError("Area file must be provided in `from_file`")
+            raise ValueError("Area file must be provided in `from_file`")
         if not path.exists() or not path.is_file():
-            raise ValidationError(f"Invalid area file: {path}")
-        geometry = from_geojson(path.read_text())
-        if not isinstance(geometry, Polygon):
-            raise ValidationError(f"Unsupported geometry type: {type(geometry)}")
-        return geometry.__geo_interface__
+            raise ValueError(f"Invalid area file: {path}")
+        data = json.loads(path.read_text())
+        return data
 
     @classmethod
     def from_file(cls, path: Path, **kwargs) -> "AreaParams":
@@ -58,7 +57,16 @@ class AreaParams(BaseModel):
     def area_geometry(self) -> Polygon | None:
         if self.area is None:
             return None
-        return cast(Polygon, shape(self.area.__geo_interface__))
+        # this is absurd, but it's the only way to validate inputs
+        # and convert any geojson back to shapely
+        geometry = from_geojson(self.area.model_dump_json())
+        # if not already a polygon, use convex hull
+        if hasattr(geometry, "geoms"):
+            geometry = cast(GeometryCollection, geometry)
+            geometry = unary_union(list(geometry.geoms))
+        if not isinstance(geometry, Polygon):
+            return cast(Polygon, geometry.convex_hull)
+        return geometry
 
 
 class SearchParams(AreaParams):
@@ -77,8 +85,8 @@ class SearchParams(AreaParams):
 
 
 class ConversionParams(AreaParams):
-    target_crs: Annotated[str | CRS, BeforeValidator(validate_crs)]  # Store as string, convert on demand
-    source_crs: Annotated[str | CRS | None, BeforeValidator(validate_crs)] = None
+    target_crs: Annotated[str, BeforeValidator(validate_crs)]  # Store as string, convert on demand
+    source_crs: Annotated[str | None, BeforeValidator(validate_crs)] = None
     datasets: list[str] | None = None
     resolution: int | None = None
 
@@ -93,6 +101,10 @@ class ConversionParams(AreaParams):
         resolution: int | None = None,
         **kwargs,
     ) -> "ConversionParams":
+        if isinstance(target_crs, CRS):
+            target_crs = target_crs.to_string()
+        if source_crs and isinstance(source_crs, CRS):
+            source_crs = source_crs.to_string()
         return cls(
             area=cls._load_geometry(path),  # type: ignore
             target_crs=target_crs,
@@ -122,16 +134,20 @@ class ProductInfo(BaseModel):
 class Granule(BaseModel):
     granule_id: str
     source: str
-    assets: dict[str, Any]
+    assets: dict[str, Any]  # 'Any' must be serializable
     info: ProductInfo
     local_path: Path | None = None
 
     @classmethod
     def from_file(cls, path: Path) -> "Granule":
-        return cls.model_validate_json(path.read_text())
+        file_path = path / "_granule.json"
+        with open(file_path, "r") as f:
+            return cls.model_validate_json(f.read())
 
     def to_file(self, path: Path) -> None:
-        path.write_text(self.model_dump_json(indent=2))
+        file_path = path / "_granule.json"
+        with open(file_path, "w") as f:
+            f.write(self.model_dump_json(indent=2))
 
     def __str__(self) -> str:
         return f"Granule(id={self.granule_id})"

@@ -31,10 +31,7 @@ class EventBus:
             handlers = self._handlers.copy()
 
         for handler in handlers:
-            try:
-                handler(event)
-            except Exception as e:
-                log.error(f"Error in progress handler: {e}")
+            handler(event)
 
 
 # global bus instance, thread-safe singleton

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
+from pydantic import BaseModel
 from pystac_client import Client
 from xarray import DataArray
 
@@ -21,6 +22,11 @@ from satctl.utils import extract_zip
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
+
+
+class S3Asset(BaseModel):
+    href: str
+    media_type: str | None
 
 
 class Sentinel3Source(DataSource):
@@ -70,7 +76,7 @@ class Sentinel3Source(DataSource):
             Granule(
                 granule_id=i.id,
                 source=self.collections[0],
-                assets=i.assets,
+                assets={k: S3Asset(href=v.href, media_type=v.media_type) for k, v in i.assets.items()},
                 info=self._parse_item_name(i.id),
             )
             for i in search.items()
@@ -93,6 +99,7 @@ class Sentinel3Source(DataSource):
             item (Granule): STAC item to validate
         """
         for name, asset in item.assets.items():
+            asset = cast(S3Asset, asset)
             # We expect zips, netcdfs, xfdumanifest.xml and thumbnail.jpg
             assert asset.media_type in ("application/netcdf", "application/zip", "image/jpeg", "application/xml")
             # The zip is our main interest
@@ -105,12 +112,12 @@ class Sentinel3Source(DataSource):
     def download_item(self, item: Granule, destination: Path) -> bool:
         """Download single item - can be called in thread pool."""
         self.validate(item)
-        zip_asset = item.assets["product"]
+        zip_asset = cast(S3Asset, item.assets["product"])
         local_file = destination / f"{item.granule_id}.zip"
         if result := self.downloader.download(
             uri=zip_asset.href,
             destination=local_file,
-            task_id=item.granule_id,
+            item_id=item.granule_id,
         ):
             # extract to uniform with other sources
             local_path = extract_zip(
@@ -120,8 +127,11 @@ class Sentinel3Source(DataSource):
                 expected_dir=f"{item.granule_id}.SEN3",
             )
             item.local_path = local_path
-            # delete the redundant zip file
-            local_file.unlink()
+            log.debug("Saving granule metadata to: %s", local_path)
+            item.to_file(local_path)
+            local_file.unlink()  # delete redundant zip
+        else:
+            log.warning("Failed to download: %s", item.granule_id)
         return result
 
     def download(
@@ -153,7 +163,11 @@ class Sentinel3Source(DataSource):
                 future2item = {executor.submit(self.download_item, item, destination): item for item in items}
                 for future in as_completed(future2item):
                     item = future2item[future]
-                    if future.result():
+                    print("we are in future: ", future)
+                    print("item ", future2item[future])
+                    result = future.result()
+                    print("result: ", result)
+                    if result:
                         success.append(item)
                     else:
                         failure.append(item)

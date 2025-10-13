@@ -43,12 +43,14 @@ class HTTPDownloader(Downloader):
         self,
         uri: str,
         destination: Path,
-        task_id: str,
+        item_id: str,
     ) -> bool:
         """
         Download file from HTTP URL with retries and progress reporting.
         """
         error = ""
+        task_id = f"download_{item_id}"
+
         log.debug("Downloading resource %s into: %s", uri, destination)
         emit_event(ProgressEventType.TASK_CREATED, task_id=task_id, description="download")
         for attempt in range(self.max_retries):
@@ -84,8 +86,8 @@ class HTTPDownloader(Downloader):
                             downloaded_bytes += len(chunk)
                             emit_event(ProgressEventType.TASK_PROGRESS, task_id=task_id, advance=len(chunk))
 
-                emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
                 log.debug(f"Successfully downloaded {uri} ({downloaded_bytes} bytes)")
+                emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
                 return True
 
             except requests.exceptions.Timeout:

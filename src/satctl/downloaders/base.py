@@ -17,7 +17,7 @@ class Downloader(ABC):
         self,
         uri: str,
         destination: Path,
-        task_id: str,
+        item_id: str,
     ) -> bool: ...
 
     @abstractmethod

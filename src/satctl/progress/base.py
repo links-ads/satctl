@@ -1,9 +1,12 @@
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from logging import Handler
 
 from satctl.model import ProgressEvent
 from satctl.progress.events import get_bus
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -47,6 +50,8 @@ class ProgressReporter(ABC):
         event_handler_fn = getattr(self, event_handler_name, None)
         if event_handler_fn is None:
             raise ValueError(f"No handler for event: {event.type.value}")
+        if event.type.value != "task_progress":
+            log.debug("Handling event: %s", event)
         event_handler_fn(event)
 
     def on_batch_started(self, event: ProgressEvent): ...

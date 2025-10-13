@@ -83,11 +83,14 @@ def extract_zip(
     Returns:
         Path to extracted directory or None if failed
     """
+    task_id = f"extract_{item_id}"
+
+    emit_event(ProgressEventType.TASK_CREATED, task_id=task_id, description="extract")
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
         # zip_ref.extractall(extract_to)
 
         total_size = sum(f.file_size for f in zip_ref.infolist() if not f.is_dir())
-        emit_event(ProgressEventType.TASK_DURATION, task_id=item_id, duration=total_size)
+        emit_event(ProgressEventType.TASK_DURATION, task_id=task_id, duration=total_size)
 
         for info in zip_ref.infolist():
             if info.is_dir():
@@ -98,7 +101,7 @@ def extract_zip(
                 with zip_ref.open(info) as in_file, open(str(file_path), "wb") as out_file:
                     copyfileobj(
                         IOProgressWrapper(
-                            callback=partial(emit_event, ProgressEventType.TASK_PROGRESS, item_id),
+                            callback=partial(emit_event, ProgressEventType.TASK_PROGRESS, task_id),
                             stream=in_file,
                         ),
                         out_file,
@@ -108,9 +111,11 @@ def extract_zip(
         extracted_dir = extract_to / expected_dir
         if not extracted_dir.exists():
             raise ValueError(f"Expected directory {expected_dir} not found")
+        emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
         return extracted_dir
     else:
         # Return the extract_to directory
+        emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
         return extract_to
 
 
