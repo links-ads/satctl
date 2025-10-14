@@ -14,9 +14,8 @@ modifiers:
     sunz_threshold: 85.0
 
 composites:
-  all_bands_1km:
+  all_bands:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
-    # target_resolution: 1000
     prerequisites:
     - name: S1
       modifiers: [sunz_corrected]
@@ -36,12 +35,22 @@ composites:
     - S9
     - F1
     - F2
-    standard_name: all_bands_1km
+    standard_name: all_bands
 
 
-  all_bands_500m:
+  all_bands_m:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
-    target_resolution: 500
+    prerequisites:
+    - name: S7
+      modifiers: [nir_reflectance]
+    - S8
+    - S9
+    - F1
+    - F2
+    standard_name: all_bands_m
+
+  all_bands_h:
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites:
     - name: S1
       modifiers: [sunz_corrected]
@@ -56,9 +65,4 @@ composites:
     - name: S6
       modifiers: [sunz_corrected]
     - name: S7
-      modifiers: [nir_reflectance]
-    - S8
-    - S9
-    - F1
-    - F2
-    standard_name: all_bands_500m
+    standard_name: all_bands_h

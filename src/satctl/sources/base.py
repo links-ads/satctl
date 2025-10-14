@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from pyproj import CRS, Transformer
 from pyresample import create_area_def
-from pyresample.geometry import AreaDefinition
+from pyresample.geometry import AreaDefinition, SwathDefinition
 from satpy.scene import Scene
 from shapely import Polygon
 
@@ -66,6 +66,7 @@ class DataSource(ABC):
         self,
         item: Granule,
         datasets: list[str] | None = None,
+        generate: bool = False,
         **scene_options: dict[str, Any],
     ) -> Scene:
         if not datasets:
@@ -97,52 +98,108 @@ class DataSource(ABC):
         )
         return scene.resample(destination=area_def, datasets=datasets, **resample_options)
 
+    def get_finest_resolution(self, scene: Scene) -> int:
+        """
+        Scan all datasets and return smallest resolution.
+        """
+        resolutions = [ds.attrs.get("resolution") for ds in scene.values()]
+        resolutions = [r for r in resolutions if r is not None]
+        return min(resolutions)
+
     def define_area(
         self,
-        target_crs: CRS,
+        *,
         area: Polygon | None = None,
         scene: Scene | None = None,
+        target_crs: CRS,
         source_crs: CRS | None = None,
         resolution: int | None = None,
         name: str | None = None,
         description: str | None = None,
     ) -> AreaDefinition:
-        """Generate a pyresample AreaDefinition from a given polygon/multipolygon.
+        """Create area definition for resampling.
+
+        When area is None and scene is provided, creates area covering full
+        scene extent at finest available resolution.
 
         Args:
-            area (Polygon, | None, optional): area defining custom extents of the resampled output, if provided.
-            scene (Scene | None, optional): alternative to custom area, gets the maximum extents from a scene.
-            target_crs (pyproj.CRS): CRS to use as destination for projection.
-            source_crs (pyproj.CRS, optional): CRS of the input polygon. Assumed to be `EPSG:4326` when none.
-            resolution (int): custom spatial resolution (overrides default resolution if set),
-                              unit is defined by the target CRS. Defaults to None.
-            name (str | None, optional): name to be assigned to the definition. Defaults to None.
-            description (str | None, optional): Optional description for the definition. Defaults to None.
+            area(Polygon, optional): Optional polygon defining custom extents
+            scene (Scene, optional): Optional scene to extract extent from
+            target_crs (CRS): Target coordinate reference system
+            source_crs (CRS, optional): Source CRS (defaults to EPSG:4326)
+            resolution (int, optional): Resolution in CRS units (defaults to finest available)
+            name (str, optional): Area name
+            description (str, optional): Area description
 
         Returns:
-            AreaDefinition: pyresample definition for satpy
+            AreaDefinition: area required for resampling
         """
         if area:
             bounds = area.bounds
         elif scene:
-            definition = scene.finest_area()
-            lons, lats = definition.get_latlons()  # type: ignore (this is not a list)
-            bounds = (lons.min(), lats.min(), lons.max(), lats.max())
+            area_def = scene.finest_area()
+            if isinstance(area_def, SwathDefinition):
+                import dask.array as da
+
+                # extract bounds from swath lon/lat arrays
+                lons, lats = area_def.lons, area_def.lats
+                if isinstance(lons.data, da.Array):
+                    lon_min = float(lons.min().compute())
+                    lon_max = float(lons.max().compute())
+                    lat_min = float(lats.min().compute())
+                    lat_max = float(lats.max().compute())
+                else:
+                    lon_min = float(lons.min())
+                    lon_max = float(lons.max())
+                    lat_min = float(lats.min())
+                    lat_max = float(lats.max())
+                bounds = (lon_min, lat_min, lon_max, lat_max)
+            elif isinstance(area_def, AreaDefinition):
+                # use area extent directly
+                bounds = area_def.area_extent
+            else:
+                raise ValueError(f"Unsupported area type: {type(area_def)}")
         else:
-            raise ValueError("Provide at least one between 'area' and 'scene'")
+            raise ValueError("Provide either 'area' or 'scene'")
 
-        resolution = resolution or self.default_resolution
+        # determine resolution (use finest if not specified)
+        if resolution is None:
+            if scene:
+                resolution = self.get_finest_resolution(scene)
+            elif self.default_resolution:
+                resolution = self.default_resolution
+            else:
+                raise ValueError("Cannot determine resolution, please provide it manually.")
+
+        # transform bounds to target CRS
         source_crs = source_crs or CRS.from_epsg(4326)
-        projector = Transformer.from_crs(source_crs, target_crs, always_xy=True)
-        min_x, min_y = projector.transform(bounds[0], bounds[1])  # SW corner
-        max_x, max_y = projector.transform(bounds[2], bounds[3])  # NE corner
+        transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
+        min_x, min_y = transformer.transform(bounds[0], bounds[1])
+        max_x, max_y = transformer.transform(bounds[2], bounds[3])
 
+        if target_crs.is_geographic:
+            # Resolution is in meters, but CRS is degrees
+            # Approximate: 1 degree ≈ 111km at equator
+            units = "degrees"
+            resolution_degrees = resolution / 111000.0
+            width = int(round((max_x - min_x) / resolution_degrees))
+            height = int(round((max_y - min_y) / resolution_degrees))
+        else:
+            # Projected CRS - resolution already in correct units
+            units = "metres"
+            width = int(round((max_x - min_x) / resolution))
+            height = int(round((max_y - min_y) / resolution))
+        width = max(1, width)
+        height = max(1, height)
+
+        # Create concrete AreaDefinition
         area_def = create_area_def(
-            name,
+            name or f"{self.source_name}-area",
             target_crs,
-            resolution=resolution,
             area_extent=[min_x, min_y, max_x, max_y],
-            units=f"{target_crs.axis_info[0].unit_name}s",  # pyresample is plural (metres, degrees)
+            width=width,
+            height=height,
+            units=units,
             description=description,
         )
         return cast(AreaDefinition, area_def)

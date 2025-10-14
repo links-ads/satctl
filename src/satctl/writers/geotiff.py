@@ -140,7 +140,7 @@ class GeoTIFFWriter(Writer):
         # write the GeoTIFF
         with rasterio.open(output_path, "w", **profile) as dst:
             for i in range(num_bands):
-                dst.write(dataset[i], i + 1)
+                dst.write(data[i], i + 1)
                 dst.set_band_description(i + 1, band_names[i])
             # add metadata
             tags = tags or {}

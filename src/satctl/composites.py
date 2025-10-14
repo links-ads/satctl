@@ -1,11 +1,8 @@
-import logging
 from typing import Optional, Sequence
 
 import xarray as xr
 from satpy.composites.core import CompositeBase, check_times
 from satpy.dataset.metadata import combine_metadata
-
-LOG = logging.getLogger(__name__)
 
 
 class MultiBandCompositor(CompositeBase):

@@ -53,7 +53,7 @@ class RichProgressReporter(ProgressReporter):
                 RichHandler(
                     show_time=True,
                     show_path=False,
-                    rich_tracebacks=True,
+                    rich_tracebacks=False,
                     tracebacks_suppress=["typer", "click"],
                 )
             ],
