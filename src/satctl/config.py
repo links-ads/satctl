@@ -32,7 +32,7 @@ class EnvYamlConfigSettingsSource(YamlConfigSettingsSource):
         return {}
 
 
-class MainSettings(BaseSettings):
+class SatCtlSettings(BaseSettings):
     model_config = SettingsConfigDict(
         yaml_file="config.yml",
         env_file=".env",
@@ -54,8 +54,18 @@ class MainSettings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            EnvYamlConfigSettingsSource(settings_cls),
             env_settings,
             dotenv_settings,
+            EnvYamlConfigSettingsSource(settings_cls),
             file_secret_settings,
         )
+
+
+_instance: SatCtlSettings | None = None
+
+
+def get_settings(**kwargs: dict[str, Any]) -> SatCtlSettings:
+    if _instance is not None:
+        return _instance
+    kwargs = kwargs or {}
+    return SatCtlSettings(**kwargs)

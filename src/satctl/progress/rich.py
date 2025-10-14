@@ -1,6 +1,11 @@
+import logging
+from collections import namedtuple
 from typing import Any
 
-from satctl.progress import ProgressReporter
+from satctl.model import ProgressEvent
+from satctl.progress import LoggingConfig, ProgressReporter
+
+TaskInfo = namedtuple("TaskInfo", ("task_id", "description"))
 
 
 class RichProgressReporter(ProgressReporter):
@@ -16,63 +21,102 @@ class RichProgressReporter(ProgressReporter):
                 TimeRemainingColumn,
                 TransferSpeedColumn,
             )
+
+            self.progress = Progress(
+                TextColumn("[bold green]{task.description}", justify="right"),
+                TextColumn("[blue]{task.fields[item_id]}", justify="right"),
+                BarColumn(bar_width=None),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                DownloadColumn(),
+                "•",
+                TransferSpeedColumn(),
+                "•",
+                TimeRemainingColumn(),
+            )
         except ImportError:
             raise ImportError(
-                "rich is not installed, please ensure to install it manually or include the extra `eokit[console]`"
+                "rich is not installed. Either run `pip install satctl[console]`, "
+                "install it manually, or choose another progress reporter"
             )
 
-        self.progress = Progress(
-            TextColumn("[bold green]{task.description}", justify="right"),
-            TextColumn("[blue]{task.fields[item_id]}", justify="right"),
-            BarColumn(bar_width=None),
-            "[progress.percentage]{task.percentage:>3.1f}%",
-            "•",
-            DownloadColumn(),
-            "•",
-            TransferSpeedColumn(),
-            "•",
-            TimeRemainingColumn(),
-        )
-        self._active = False
+        self.log = logging.getLogger(__name__)
+        self.active = False
+        self.task_info: dict[str, Any] = {}
 
-    def start(self, total_items: int) -> None:
+    @classmethod
+    def logging_config(cls) -> LoggingConfig:
+        from rich.logging import RichHandler
+
+        return LoggingConfig(
+            handlers=[
+                RichHandler(
+                    show_time=True,
+                    show_path=False,
+                    rich_tracebacks=True,
+                    tracebacks_suppress=["typer", "click"],
+                )
+            ],
+            format="%(message)s",
+        )
+
+    def start(self) -> None:
         self.progress.start()
-        self._active = True
-        self._tasks = {}
-
-    def add_task(self, item_id: str, description: str) -> Any:
-        task_id = self.progress.add_task(
-            description=description,
-            item_id=item_id,
-            start=False,
-            total=None,  # Will be set when we know file size
-        )
-        self._tasks[task_id] = dict(
-            description=description,
-            item_id=item_id,
-        )
-        return task_id
-
-    def set_task_duration(self, task: Any, total: int) -> None:
-        """Set total size for a task (when we get Content-Length)."""
-        if self._active:
-            self.progress.update(task, total=total)
-            self.progress.start_task(task)
-
-    def update_progress(self, task: Any, advance: int | None = None, description: str | None = None) -> None:
-        if self._active:
-            self.progress.update(task, advance=advance, description=description)
-            if description is not None:
-                self._tasks[task]["description"] = description
-
-    def end_task(self, task: Any, success: bool, description: str | None = None) -> None:
-        if self._active:
-            status = "✓" if success else "✗"
-            description = description or self._tasks[task]["description"]
-            self.progress.update(task, description=f"{status} {description}")
+        self.active = True
+        super().start()
 
     def stop(self) -> None:
-        if self._active:
-            self.progress.stop()
-            self._active = False
-            self._tasks.clear()
+        if not self.active:
+            return
+        self.progress.stop()
+        self.active = False
+        self.task_info.clear()
+        super().stop()
+
+    def on_batch_started(self, event: ProgressEvent):
+        description = event.data.get("description")
+        total_items = event.data.get("total_items")
+        self.log.info("Starting batch: %s - (%s items)", description, total_items or "NA")
+
+    def on_batch_completed(self, event: ProgressEvent) -> None:
+        success_count = event.data.get("success_count")
+        failure_count = event.data.get("failure_count")
+        success = str(success_count) or "NA"
+        failure = str(failure_count) or "NA"
+        self.log.info("Batch complete: %s succeeded, %s failed", success, failure)
+
+    def on_task_created(self, event: ProgressEvent) -> Any:
+        description = event.data.get("description", "")
+        task_id = self.progress.add_task(
+            description=description,
+            item_id=event.task_id,
+            start=False,
+            total=None,  # will be set when we know file size
+        )
+        self.task_info[event.task_id] = TaskInfo(task_id=task_id, description=description)
+        return task_id
+
+    def on_task_duration(self, event: ProgressEvent) -> None:
+        task_id = self.task_info[event.task_id].task_id
+        self.progress.update(task_id=task_id, total=event.data.get("duration"))
+        self.progress.start_task(task_id=task_id)
+
+    def on_task_progress(self, event: ProgressEvent) -> None:
+        task_info = self.task_info[event.task_id]
+        description = event.data.get("description", task_info.description)
+        # update description if necessary
+        if description != task_info.description:
+            task_info = TaskInfo(task_id=task_info.task_id, description=description)
+            self.task_info[event.task_id] = task_info
+        self.progress.update(
+            task_id=task_info.task_id,
+            advance=event.data.get("advance"),
+            description=task_info.description,
+        )
+
+    def on_task_completed(self, event: ProgressEvent) -> None:
+        status = "✓" if event.data.get("success") else "✗"
+        task_info = self.task_info[event.task_id]
+        description = event.data.get("description", task_info.description)
+        self.progress.update(task_id=task_info.task_id, description=f"{status} {description}")
+        del self.task_info[event.task_id]

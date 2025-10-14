@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from satctl.auth import Authenticator
-from satctl.progress import ProgressReporter
 
 
 class Downloader(ABC):
@@ -16,10 +15,9 @@ class Downloader(ABC):
     @abstractmethod
     def download(
         self,
-        uri: str,  # TODO is this too restrictive?
+        uri: str,
         destination: Path,
-        progress: ProgressReporter | None = None,
-        task_id: str | None = None,
+        item_id: str,
     ) -> bool: ...
 
     @abstractmethod

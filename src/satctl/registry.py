@@ -6,16 +6,25 @@ T = TypeVar("T")
 class Registry(Generic[T]):
     """Registry for managing specific class implementations."""
 
-    def __init__(self):
+    def __init__(self, name: str):
+        self.registry_name = name
         self._items: dict[str, type[T]] = {}
+
+    def get(self, name: str) -> type[T] | None:
+        return self._items.get(name)
 
     def register(self, name: str, source_class: type[T]):
         self._items[name] = source_class
 
     def create(self, name: str, **kwargs) -> T:
         if name not in self._items:
-            raise FileNotFoundError(f"Item '{name}' not found. Available: {list(self._items.keys())}")
-
+            raise ValueError(
+                (
+                    f"{self.registry_name.capitalize()} '{name}' not found. "
+                    f"Specify one of the following: ({list(self._items.keys())}), "
+                    f"or register your own {self.registry_name}."
+                )
+            )
         source_class = self._items[name]
         return source_class(**kwargs)
 

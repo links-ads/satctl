@@ -1,25 +1,24 @@
-from satctl.progress.base import EmptyReporter, ProgressReporter
+from typing import Any
+
+from satctl.progress.base import EmptyProgressReporter, LoggingConfig, ProgressReporter
 from satctl.progress.rich import RichProgressReporter
 from satctl.progress.simple import SimpleProgressReporter
 from satctl.registry import Registry
 
-registry = Registry[ProgressReporter]()
-registry.register("empty", EmptyReporter)
+registry = Registry[ProgressReporter](name="reporter")
+registry.register("empty", EmptyProgressReporter)
 registry.register("simple", SimpleProgressReporter)
 registry.register("rich", RichProgressReporter)
 
 __all__ = [
     "ProgressReporter",
-    "EmptyReporter",
+    "EmptyProgressReporter",
     "SimpleProgressReporter",
     "RichProgressReporter",
+    "LoggingConfig",
 ]
 
 
-def create_reporter(reporter_name: str | None, config: dict | None = None) -> ProgressReporter:
-    if reporter_name is None:
-        reporter_name = "empty"
-    if not registry.is_registered(reporter_name):
-        raise ValueError(f"Unknown reporter: {reporter_name}. Available reporters: {registry.list()}")
-    config = config or {}
+def create_reporter(reporter_name: str, **kwargs: dict[str, Any]) -> ProgressReporter | None:
+    config = kwargs or {}
     return registry.create(reporter_name, **config)

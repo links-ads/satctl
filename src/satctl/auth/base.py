@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class Authenticator(ABC):
@@ -16,3 +17,7 @@ class Authenticator(ABC):
     @property
     @abstractmethod
     def auth_headers(self) -> dict[str, str]: ...
+
+    @property
+    @abstractmethod
+    def auth_session(self) -> Any: ...

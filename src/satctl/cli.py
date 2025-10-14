@@ -1,12 +1,11 @@
-import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from dotenv import load_dotenv
 
-from satctl.config import MainSettings
+from satctl.utils import setup_logging
 
 load_dotenv()
 app = typer.Typer(
@@ -14,34 +13,33 @@ app = typer.Typer(
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-cfg = MainSettings()  # type: ignore
+context = {}
 
 
-def setup_logging(log_level: str, suppress: dict[str, list[str]] | None = None):
-    """Configure logging based on level and optionally suppress noisy loggers.
-
-    Args:
-        log_level (str): log level, can be info, debug, warning, error
-        suppress (dict[str, list[str]] | None, optional): names of the packages to suppress. Defaults to None.
-    """
-    # Convert string to logging level
-    level = getattr(logging, log_level.upper(), logging.INFO)
-    logging.basicConfig(level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    suppress = suppress or {}
-    for log_level, loggers in suppress.items():
-        for logger_name in loggers:
-            logging.getLogger(logger_name).setLevel(log_level.upper())
+def init_reporter() -> None:
+    if "progress" not in context:
+        raise ValueError("Missing reporter, please ensure at least an `empty` reporter is registered")
+    reporter = context["progress"]
+    reporter.start()
 
 
 @app.callback()
-def main(log_level: Annotated[str, typer.Option("--log-level", "-l", help="Set logging level")] = "INFO"):
+def main(
+    log_level: Annotated[str, typer.Option("--log-level", "-l", help="Set logging level")] = "INFO",
+    progress: Annotated[Literal["empty", "simple", "rich"], typer.Option("--progress", "-p")] = "empty",
+):
+    from satctl.progress import create_reporter, registry
+
+    reporter_cls = registry.get(progress)
     setup_logging(
-        log_level,
-        suppress={
+        log_level=log_level,
+        reporter_cls=reporter_cls,
+        suppressions={
             "error": ["urllib3", "requests", "satpy.readers.core.loading", "pyresample.area_config"],
             "warning": ["satpy", "pyspectral"],
         },
     )
+    context["progress"] = create_reporter(reporter_name=progress)
 
 
 @app.command()
@@ -54,81 +52,97 @@ def download(
         Path | None,
         typer.Option("--output-dir", "-o", help="Path to where the outputs will be stored"),
     ] = None,
-    progress: Annotated[
-        str | None,
-        typer.Option("--progress", "-p", help="Which progress reporter to use, defaults to none."),
+    num_workers: Annotated[
+        int | None, typer.Option("--num-workers", "-nw", help="Workers count for parallel processing")
     ] = None,
 ):
     from satctl.model import SearchParams
-    from satctl.progress import create_reporter
     from satctl.sources import create_source, registry
 
+    init_reporter()
     if "all" in sources:
         sources = registry.list()
     output_dir = output_dir or Path("outputs/downloads")
 
-    search_params = SearchParams(start=start, end=end, area=area_file)
-    reporter = create_reporter(reporter_name=progress)
-
+    search_params = SearchParams.from_file(path=area_file, start=start, end=end)
     for source_name in sources:
         output_subdir = output_dir / source_name.lower()
-        source = create_source(source_name, config=cfg)
+        source = create_source(source_name)
         items = source.search(params=search_params)
-        source.download(items, output_dir=output_subdir, progress=reporter)
+        source.download(items, destination=output_subdir, num_workers=num_workers)
 
 
 @app.command()
 def convert(
     sources: list[str],
-    area_file: Annotated[Path, typer.Option("--area", "-a", help="Path to a GeoJSON file containing the AoI")],
-    source_dir: Annotated[
+    area_file: Annotated[
+        Path | None, typer.Option("--area", "-a", help="Path to a GeoJSON file containing the AoI")
+    ] = None,
+    input_dir: Annotated[
         Path | None,
-        typer.Option("--source-dir", "-s", help="Directory containing raw files"),
+        typer.Option("--input-dir", "-s", help="Directory containing raw files"),
     ] = None,
     output_dir: Annotated[
         Path | None,
         typer.Option("--output-dir", "-o", help="Where to store processed files"),
     ] = None,
     crs: Annotated[str, typer.Option("--crs", help="Coordinate Reference System for the output files")] = "EPSG:4326",
+    datasets: Annotated[
+        list[str] | None, typer.Option("--datasets", "-d", help="List of satpy datasets (or composites) to save")
+    ] = None,
+    resolution: Annotated[
+        int | None, typer.Option("--resolution", "-r", help="Custom output resolution for the raw inputs")
+    ] = None,
     force_conversion: Annotated[
         bool, typer.Option("--force-conversion", "-f", help="Execute also on already processed files")
     ] = False,
     writer_name: Annotated[
         str, typer.Option("--writer", "-w", help="Which writer to use to save results")
     ] = "geotiff",
-    reporter_name: Annotated[
-        str | None, typer.Option("--progress", "-p", help="Which progress reporter to use, defaults to none.")
-    ] = None,
 ):
-    from satctl.model import ConversionParams
-    from satctl.progress import create_reporter
+    from satctl.model import ConversionParams, Granule
     from satctl.sources import create_source, registry
     from satctl.writers import create_writer
 
-    assert sources, "At least one source is required"
-    source_dir = source_dir or Path("outputs/downloads")
+    input_dir = input_dir or Path("outputs/downloads")
     output_dir = output_dir or Path("outputs/processed")
+    init_reporter()
 
-    params = ConversionParams(area=area_file, crs_data=crs)
+    if area_file is not None:
+        params = ConversionParams.from_file(
+            path=area_file,
+            target_crs=crs,
+            datasets=datasets,
+            resolution=resolution,
+        )
+    else:
+        params = ConversionParams(
+            target_crs=crs,
+            datasets=datasets,
+            resolution=resolution,
+        )
     writer = create_writer(writer_name=writer_name)
-    reporter = create_reporter(reporter_name=reporter_name)
 
     if "all" in sources:
         sources = registry.list()
 
     for source_name in sources:
-        source = create_source(source_name, config=cfg)
-        source_subdir = source_dir / source_name.lower()
+        source = create_source(source_name)
+        source_subdir = input_dir / source_name.lower()
         output_subdir = output_dir / source_name.lower()
 
         if source_subdir.exists():
-            source.convert(
+            items = [Granule.from_file(f) for f in source_subdir.glob("*") if f.is_dir()]
+            source.save(
+                items=items,
                 params=params,
-                source=source_subdir,
-                output_dir=output_subdir,
+                destination=output_subdir,
                 writer=writer,
-                progress=reporter,
                 force=force_conversion,
             )
         else:
-            typer.echo(f"Warning: No data found for {source_name} in {source_dir}")
+            typer.echo(f"Warning: No data found for {source_name} in {source_subdir}")
+
+
+if __name__ == "__main__":
+    app()

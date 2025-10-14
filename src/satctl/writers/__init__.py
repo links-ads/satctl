@@ -2,7 +2,7 @@ from satctl.registry import Registry
 from satctl.writers.base import Writer
 from satctl.writers.geotiff import GeoTIFFWriter
 
-registry = Registry[Writer]()
+registry = Registry[Writer](name="writer")
 registry.register("geotiff", GeoTIFFWriter)
 
 

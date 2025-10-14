@@ -15,8 +15,8 @@ modifiers:
 
 composites:
   all_bands_1km:
-    compositor: !!python/name:satpy.composites.core.GenericCompositor
-    target_resolution: 1000
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    # target_resolution: 1000
     prerequisites:
     - name: S1
       modifiers: [sunz_corrected]
@@ -40,7 +40,7 @@ composites:
 
 
   all_bands_500m:
-    compositor: !!python/name:satpy.composites.core.GenericCompositor
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
     target_resolution: 500
     prerequisites:
     - name: S1

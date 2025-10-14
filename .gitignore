@@ -207,6 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 # additional material that could be pushed in the future
+.vscode/
 uv.lock
 .python-version
 data/

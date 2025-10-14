@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import rasterio
@@ -8,7 +8,6 @@ import rasterio.crs
 import rasterio.transform
 from pyproj import CRS
 from rasterio.transform import Affine
-from satpy.scene import Scene
 from xarray import DataArray
 
 from satctl.writers import Writer
@@ -26,6 +25,7 @@ class GeoTIFFWriter(Writer):
         dtype: Any | None = None,
         fill_value: Any = None,
     ):
+        super().__init__(extension="tif")
         self.compress = compress
         self.tiled = tiled
         self.dtype = dtype
@@ -88,69 +88,65 @@ class GeoTIFFWriter(Writer):
 
     def write(
         self,
-        scene: Scene,
+        dataset: DataArray,
         output_path: Path,
-        composite: str,
         **tags,
-    ) -> bool:
-        """Write scene composite to GeoTIFF."""
-        try:
-            dataset: DataArray = cast(DataArray, scene[composite])
-            crs, transform, gcps = self._get_transform_gcps(dataset)
+    ) -> None:
+        """
+        Write scene composite to GeoTIFF.
+        """
+        if not output_path.parent.exists() or output_path.is_dir():
+            raise FileNotFoundError(f"Invalid directory {output_path.parent}")
+        crs, transform, gcps = self._get_transform_gcps(dataset)
+        # Prepare data
+        data = dataset.values
+        if dataset.ndim == 2:
+            data = data.reshape(1, data.shape[0], data.shape[1])
+            num_bands = 1
+        elif data.ndim == 3:
+            if "bands" in dataset.dims:
+                band_dim_idx = dataset.dims.index("bands")
+                if band_dim_idx != 0:
+                    axes = list(range(data.ndim))
+                    axes[0], axes[band_dim_idx] = axes[band_dim_idx], axes[0]
+                    data = np.transpose(data, axes)
+            num_bands = dataset.shape[0]
+        else:
+            raise ValueError(f"Unsupported data dimensions: {dataset.shape}")
+        height, width = dataset.shape[-2:]
 
-            # Prepare data
-            data = dataset.values
-            if data.ndim == 2:
-                data = data.reshape(1, data.shape[0], data.shape[1])
-                num_bands = 1
-            elif data.ndim == 3:
-                if "bands" in dataset.dims:
-                    band_dim_idx = dataset.dims.index("bands")
-                    if band_dim_idx != 0:
-                        axes = list(range(data.ndim))
-                        axes[0], axes[band_dim_idx] = axes[band_dim_idx], axes[0]
-                        data = np.transpose(data, axes)
-                num_bands = data.shape[0]
-            else:
-                raise ValueError(f"Unsupported data dimensions: {data.shape}")
-            height, width = data.shape[-2:]
+        # determine dtype and fill_value
+        dtype = self.dtype or dataset.dtype
+        if self.fill_value is None and np.issubdtype(dtype, np.floating):
+            self.fill_value = np.nan
 
-            # determine dtype and fill_value
-            dtype = self.dtype or data.dtype
-            if self.fill_value is None and np.issubdtype(dtype, np.floating):
-                self.fill_value = np.nan
+        # get band names
+        band_names = []
+        if "bands" in dataset.coords:
+            band_names = [str(name) for name in dataset.coords["bands"].values]
+        else:
+            band_names = [f"band_{i + 1}" for i in range(num_bands)]
 
-            # get band names
-            band_names = []
-            if "bands" in dataset.coords:
-                band_names = [str(name) for name in dataset.coords["bands"].values]
-            else:
-                band_names = [f"band_{i + 1}" for i in range(num_bands)]
+        # add GCPs if available (for swath data)
+        profile = self._create_profile(height, width, num_bands, dtype, crs, transform)
+        if gcps is not None and crs is not None:
+            profile["gcps"] = gcps
+            profile.pop("transform", None)
 
-            # add GCPs if available (for swath data)
-            profile = self._create_profile(height, width, num_bands, dtype, crs, transform)
-            if gcps is not None and crs is not None:
-                profile["gcps"] = gcps
-                profile.pop("transform", None)
-            log.debug("Saving %d-band GeoTIFF: %s", num_bands, output_path.name)
-            log.debug("Data shape: %s, dtype: %s", data.shape, dtype)
+        # write geotiff
+        log.debug("Saving %d-band GeoTIFF: %s", num_bands, output_path)
+        log.debug("Data shape: %s, dtype: %s", dataset.shape, dtype)
 
-            # write the GeoTIFF
-            with rasterio.open(output_path, "w", **profile) as dst:
-                for i in range(num_bands):
-                    dst.write(data[i], i + 1)
-                    dst.set_band_description(i + 1, band_names[i])
-                # add metadata
-                tags = tags or {}
-                tags.update(composite=composite)
-                for key, value in dataset.attrs.items():
-                    if isinstance(value, (str, int, float)) and key not in ["area"]:
-                        tags[key] = str(value)
-                dst.update_tags(**tags)
+        # write the GeoTIFF
+        with rasterio.open(output_path, "w", **profile) as dst:
+            for i in range(num_bands):
+                dst.write(dataset[i], i + 1)
+                dst.set_band_description(i + 1, band_names[i])
+            # add metadata
+            tags = tags or {}
+            for key, value in dataset.attrs.items():
+                if isinstance(value, (str, int, float)) and key not in ["area"]:
+                    tags[key] = str(value)
+            dst.update_tags(**tags)
 
-            log.debug("Successfully saved: %s", output_path)
-            return True
-
-        except Exception as e:
-            log.error("Failed to write %s: %s", output_path, str(e))
-            return False
+        log.debug("Successfully saved: %s", output_path)

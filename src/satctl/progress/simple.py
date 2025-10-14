@@ -1,6 +1,5 @@
-from typing import Any
-
-from satctl.progress.base import ProgressReporter
+from satctl.model import ProgressEvent
+from satctl.progress import LoggingConfig, ProgressReporter
 
 
 class SimpleProgressReporter(ProgressReporter):
@@ -14,47 +13,59 @@ class SimpleProgressReporter(ProgressReporter):
         self.completed = 0
         self.failed = 0
 
-    def start(self, total_items: int) -> None:
-        self.total_items = total_items
+    @classmethod
+    def logging_config(cls) -> LoggingConfig:
+        return LoggingConfig(
+            handlers=None,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+
+    def start(self) -> None:
+        super().start()
+        self.total_items = 0
         self.completed = 0
         self.failed = 0
+
+    def stop(self) -> None:
+        return super().stop()
+
+    def on_batch_started(self, event: ProgressEvent) -> None:
+        total_items = event.data.get("total_items", "NA")
+        self.total_items = total_items
         self.log.info(f"Tracking progress for {total_items} items")
 
-    def add_task(self, item_id: str, description: str) -> dict:
-        self.log.info("Started %s - %s", description, item_id)
-        return {"item_id": item_id, "description": description}
+    def on_batch_completed(self, event: ProgressEvent):
+        success_count = event.data.get("success_count")
+        failure_count = event.data.get("failure_count")
+        success = str(success_count) or "NA"
+        failure = str(failure_count) or "NA"
+        self.log.info(f"Batch complete: {success} succeeded, {failure} failed")
 
-    def set_task_duration(self, task: Any, total: int) -> None:
-        # we do not track task duration in simple reporter
+    def on_task_created(self, event: ProgressEvent):
+        self.log.info("Started %s - %s", event.task_id, event.data.get("description", ""))
+
+    def on_task_duration(self, event: ProgressEvent):
+        # task duration not yet tracked in simple reporter
         pass
 
-    def update_progress(self, task: Any, advance: int | None = None, description: str | None = None) -> None:
+    def on_task_progress(self, event: ProgressEvent):
         # no byte-level progress
         pass
 
-    def end_task(self, task: Any, success: bool, description: str | None = None) -> None:
+    def on_task_completed(self, event: ProgressEvent):
+        success = event.data.get("success", False)
         if success:
             self.completed += 1
         else:
             self.failed += 1
         remaining = self.total_items - self.completed - self.failed
-        description = description or task.get("description", "")
+        description = event.data.get("description", "")
         status = f"✓ {description}" if success else f"✗ {description}"
-        item = task.get("item_id", "unknown") if task else "unknown"
-
         self.log.info(
             "%s - %s (%d/%d, %d remaining)",
             status,
-            item,
+            event.task_id,
             self.completed + self.failed,
             self.total_items,
             remaining,
-        )
-
-    def stop(self) -> None:
-        self.log.info(
-            "Tracking completed: %d successful, %d failed, %d total",
-            self.completed,
-            self.failed,
-            self.total_items,
         )
