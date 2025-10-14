@@ -299,7 +299,6 @@ class Sentinel3Source(DataSource):
                 success_count=len(success),
                 failure_count=len(failure),
             )
-            return success, failure
         except KeyboardInterrupt:
             log.info("Interruped, cleaning up...")
             if executor:
@@ -311,7 +310,9 @@ class Sentinel3Source(DataSource):
                 success_count=len(success),
                 failure_count=len(failure),
             )
-            return success, failure
+            if executor:
+                executor.shutdown()
+        return success, failure
 
 
 class SLSTRSource(Sentinel3Source):
