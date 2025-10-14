@@ -212,3 +212,6 @@ uv.lock
 .python-version
 data/
 outputs/
+
+# ignore configs
+config.yml
