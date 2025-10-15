@@ -163,10 +163,7 @@ class Sentinel3Source(DataSource):
                 future2item = {executor.submit(self.download_item, item, destination): item for item in items}
                 for future in as_completed(future2item):
                     item = future2item[future]
-                    print("we are in future: ", future)
-                    print("item ", future2item[future])
                     result = future.result()
-                    print("result: ", result)
                     if result:
                         success.append(item)
                     else:
