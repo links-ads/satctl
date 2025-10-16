@@ -5,11 +5,13 @@ from satctl.config import get_settings
 from satctl.downloaders import registry as dwl_registry
 from satctl.registry import Registry
 from satctl.sources.base import DataSource
+from satctl.sources.mtg import MTGSource
 from satctl.sources.sentinel3 import OLCISource, SLSTRSource
 
 registry = Registry[DataSource](name="source")
 registry.register("slstr", SLSTRSource)
 registry.register("olci", OLCISource)
+registry.register("mtg", MTGSource)
 
 
 def create_source(
@@ -51,4 +53,4 @@ def create_source(
     )
 
 
-__all__ = ["OLCISource", "SLSTRSource", "create_source"]
+__all__ = ["OLCISource", "SLSTRSource", "MTGSource", "create_source"]
