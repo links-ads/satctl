@@ -6,7 +6,7 @@ from satctl.registry import Registry
 
 registry = Registry[Authenticator](name="authenticator")
 registry.register("odata", ODataAuthenticator)
-registry.register("earthaccess", EarthDataAuthenticator)
 registry.register("eumetsat", EUMETSATAuthenticator)
+registry.register("earthdata", EarthDataAuthenticator)
 
 __all__ = ["ODataAuthenticator", "EarthDataAuthenticator", "EUMETSATAuthenticator"]
