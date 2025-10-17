@@ -6,10 +6,13 @@ from satctl.downloaders import registry as dwl_registry
 from satctl.registry import Registry
 from satctl.sources.base import DataSource
 from satctl.sources.sentinel3 import OLCISource, SLSTRSource
+from satctl.sources.sentinel2 import Sentinel2L2ASource, Sentinel2L1CSource
 
 registry = Registry[DataSource](name="source")
 registry.register("slstr", SLSTRSource)
 registry.register("olci", OLCISource)
+registry.register("s2l2a", Sentinel2L2ASource)
+registry.register("s2l1c", Sentinel2L1CSource)
 
 
 def create_source(
@@ -51,4 +54,4 @@ def create_source(
     )
 
 
-__all__ = ["OLCISource", "SLSTRSource", "create_source"]
+__all__ = ["OLCISource", "SLSTRSource", "Sentinel2L2ASource", "Sentinel2L1CSource", "create_source"]
