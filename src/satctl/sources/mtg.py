@@ -86,12 +86,12 @@ class MTGSource(DataSource):
                     Granule(
                         granule_id=str(i),
                         source=str(i.collection),  
-                        assets={str(i): i.url},
+                        assets={"product": i.url},
                         info=ProductInfo(
                             instrument=i.instrument,
                             level="",
                             product_type=i.product_type,
-                            acquisition_time=datetime.strptime(i.processingTime, "%Y-%m-%dT%H:%M:%S.%fZ"),
+                            acquisition_time=i.sensing_end,
                         ),
                     )
                     for i in results
