@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import earthaccess
+import xarray as xr
 from pydantic import BaseModel
 from xarray import DataArray
 
@@ -245,6 +246,35 @@ class VIIRSSource(DataSource):
         files = self.get_files(item)
         log.debug("Found %d files to process", len(files))
 
+        # Filter datasets based on day/night flag from the data
+        # TODO maybe find a cleaner way
+        with xr.open_dataset(files[0]) as ds:
+            day_night_flag = str(ds.attrs.get("DayNightFlag", "Not found")).lower()
+
+        # Remove datasets that don't match the day/night condition
+        if day_night_flag in ("day", "night"):
+            datasets_to_remove = []
+            for dataset_name in datasets_dict.keys():
+                if day_night_flag not in dataset_name.lower():
+                    datasets_to_remove.append(dataset_name)
+                    log.warning(
+                        f"Skipping dataset '{dataset_name}' for granule {item.granule_id}: "
+                        "dataset requires different day/night condition (data is {day_night_flag})"
+                    )
+
+            # Remove incompatible datasets
+            for dataset_name in datasets_to_remove:
+                del datasets_dict[dataset_name]
+
+            # If all datasets were filtered out, return early
+            if not datasets_dict:
+                log.warning(
+                    "All datasets incompatible with day/night flag (%s) for %s, skipping",
+                    day_night_flag,
+                    item.granule_id,
+                )
+                return {item.granule_id: []}
+
         # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
@@ -294,10 +324,10 @@ class VIIRSL1BSource(VIIRSSource):
         self,
         *,
         downloader: Downloader,
-        short_name: str = "VNP02MOD",  # TODO make subclasses for the various products
+        short_name: str,
         version: str | None = "2",
-        default_composite: str = "all_bands_m",
-        default_resolution: int = 750,
+        default_composite: str,
+        default_resolution: int,
         search_limit: int = 100,
     ):
         super().__init__(
@@ -322,4 +352,112 @@ class VIIRSL1BSource(VIIRSSource):
             level=parsed.level,
             product_type=parsed.product_type,
             acquisition_time=acquisition_time,
+        )
+
+
+# --- MOD Products (M-bands, 750m resolution) ---
+
+
+class VNP02MODSource(VIIRSL1BSource):
+    """VIIRS Level 1B Moderate Resolution from Suomi-NPP (VNP02MOD).
+
+    M-bands with 750m resolution at nadir.
+    """
+
+    def __init__(self, downloader: Downloader, search_limit: int = 100):
+        super().__init__(
+            downloader=downloader,
+            short_name="VNP02MOD",
+            version="2",
+            default_composite="all_bands_m_day",
+            default_resolution=750,
+            search_limit=search_limit,
+        )
+
+
+class VJ102MODSource(VIIRSL1BSource):
+    """VIIRS Level 1B Moderate Resolution from NOAA-20/JPSS-1 (VJ102MOD).
+
+    M-bands with 750m resolution at nadir.
+    """
+
+    def __init__(self, downloader: Downloader, search_limit: int = 100):
+        super().__init__(
+            downloader=downloader,
+            short_name="VJ102MOD",
+            version="2",
+            default_composite="all_bands_m_day",
+            default_resolution=750,
+            search_limit=search_limit,
+        )
+
+
+class VJ202MODSource(VIIRSL1BSource):
+    """VIIRS Level 1B Moderate Resolution from NOAA-21/JPSS-2 (VJ202MOD).
+
+    M-bands with 750m resolution at nadir.
+    """
+
+    def __init__(self, downloader: Downloader, search_limit: int = 100):
+        super().__init__(
+            downloader=downloader,
+            short_name="VJ202MOD",
+            version="2",
+            default_composite="all_bands_m_day",
+            default_resolution=750,
+            search_limit=search_limit,
+        )
+
+
+# --- IMG Products (I-bands, 375m resolution) ---
+
+
+class VNP02IMGSource(VIIRSL1BSource):
+    """VIIRS Level 1B Imagery Resolution from Suomi-NPP (VNP02IMG).
+
+    I-bands with 375m resolution at nadir.
+    """
+
+    def __init__(self, downloader: Downloader, search_limit: int = 100):
+        super().__init__(
+            downloader=downloader,
+            short_name="VNP02IMG",
+            version="2",
+            default_composite="all_bands_h_day",
+            default_resolution=375,
+            search_limit=search_limit,
+        )
+
+
+class VJ102IMGSource(VIIRSL1BSource):
+    """VIIRS Level 1B Imagery Resolution from NOAA-20/JPSS-1 (VJ102IMG).
+
+    I-bands with 375m resolution at nadir.
+    """
+
+    def __init__(self, downloader: Downloader, search_limit: int = 100):
+        super().__init__(
+            downloader=downloader,
+            short_name="VJ102IMG",
+            version="2",
+            default_composite="all_bands_h_day",
+            default_resolution=375,
+            search_limit=search_limit,
+        )
+
+
+class VJ202IMGSource(VIIRSL1BSource):
+    """VIIRS Level 1B Imagery Resolution from NOAA-21/JPSS-2 (VJ202IMG).
+
+    I-bands with 375m resolution at nadir.
+    """
+
+    def __init__(self, downloader: Downloader, search_limit: int = 100):
+        super().__init__(
+            downloader=downloader,
+            short_name="VJ202IMG",
+            version="2",
+            default_composite="all_bands_h_day",
+            default_resolution=375,
+            search_limit=search_limit,
         )
