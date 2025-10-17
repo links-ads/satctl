@@ -70,7 +70,7 @@ class Sentinel3Source(DataSource):
             collections=self.collections,
             intersects=params.area_geometry,
             datetime=(params.start, params.end),
-            limit=self.search_limit,
+            max_items=self.search_limit,
         )
         items = [
             Granule(
@@ -266,7 +266,8 @@ class SLSTRSource(Sentinel3Source):
         *,
         downloader: Downloader,
         stac_url: str,
-        composite: str = "all_bands_500m",
+        default_composite: str = "all_bands",
+        default_resolution: int = 1000,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
@@ -274,7 +275,8 @@ class SLSTRSource(Sentinel3Source):
         super().__init__(
             "sentinel-3-sl-1-rbt-ntc",
             reader="slstr_l1b",
-            default_composite=composite,
+            default_composite=default_composite,
+            default_resolution=default_resolution,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,
@@ -306,7 +308,8 @@ class OLCISource(Sentinel3Source):
         *,
         downloader: Downloader,
         stac_url: str,
-        composite: str = "all_bands_300m",
+        default_composite: str = "all_bands",
+        default_resolution: int = 300,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
@@ -314,7 +317,8 @@ class OLCISource(Sentinel3Source):
         super().__init__(
             "sentinel-3-olci-1-efr-ntc",
             reader="olci_l1b",
-            default_composite=composite,
+            default_composite=default_composite,
+            default_resolution=default_resolution,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,

@@ -122,67 +122,73 @@ class VIIRSSource(DataSource):
 
         # Add spatial filter if provided
         if params.area_geometry:
-            search_kwargs["polygon"] = params.area_geometry
+            search_kwargs["bounding_box"] = params.area_geometry.bounds  # TODO check if ok
 
         log.debug("Searching with parameters: %s", search_kwargs)
-        results = earthaccess.search_data(**search_kwargs)
+        radiance_results = earthaccess.search_data(**search_kwargs)
 
-        items = [
-            Granule(
-                granule_id=i["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", ""),
-                source=self.collections[0],
-                assets={
-                    self.asset_keys.get(str(k), "unknown"): VIIRSAsset(
-                        href=url["URL"],
-                        type=url["Type"],
-                        media_type=url["MimeType"],
-                    )
-                    for k, url in enumerate(i["umm"]["RelatedUrls"])
-                },
-                info=self._parse_item_name(i["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")),
+        items = []
+
+        for rad_result in radiance_results:
+            rad_id = rad_result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
+            geo_id = self.convert_granule_id(rad_id, "03")
+
+            geo_result = earthaccess.search_data(
+                short_name=self.short_name.replace("02", "03"),
+                granule_name=geo_id,
+            )[0]
+
+            items.append(
+                Granule(
+                    granule_id=rad_id,
+                    source=self.collections[0],
+                    assets={
+                        "radiance": {
+                            self.asset_keys.get(str(k), "unknown"): VIIRSAsset(
+                                href=url["URL"],
+                                type=url["Type"],
+                                media_type=url["MimeType"],
+                            )
+                            for k, url in enumerate(rad_result["umm"]["RelatedUrls"])
+                        },
+                        "georeference": {
+                            self.asset_keys.get(str(k), "unknown"): VIIRSAsset(
+                                href=url["URL"],
+                                type=url["Type"],
+                                media_type=url["MimeType"],
+                            )
+                            for k, url in enumerate(geo_result["umm"]["RelatedUrls"])
+                        },
+                    },
+                    info=self._parse_item_name(rad_id),
+                )
             )
-            for i in results
-        ]
 
         log.debug("Found %d items", len(items))
 
         return items
 
     def get_by_id(self, item_id: str) -> Granule:
-        result = earthaccess.search_data(
-            short_name=self.short_name.replace("02", "03"),
-            granule_name=item_id,
-        )[0]
+        raise NotImplementedError("TODO")
 
-        return Granule(
-            granule_id=result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", ""),
-            source=self.collections[0],
-            assets={
-                self.asset_keys.get(str(k), "unknown"): VIIRSAsset(
-                    href=url["URL"],
-                    type=url["Type"],
-                    media_type=url["MimeType"],
-                )
-                for k, url in enumerate(result["umm"]["RelatedUrls"])
-            },
-            info=self._parse_item_name(
-                result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
-            ),
-        )
-
-    def get_files(self, item: Granule) -> list[Path | str]: ...
+    def get_files(self, item: Granule) -> list[Path | str]:
+        if item.local_path is None:
+            raise ValueError("Local path is missing. Did you download this granule?")
+        return list(item.local_path.glob("*.nc"))
 
     def validate(self, item: Granule) -> None: ...
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         self.validate(item)
 
-        # Download 02 product
-        download_dir = destination / f"{item.granule_id}" / "02"
-        download_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination / f"{item.granule_id}"
+        destination.mkdir(parents=True, exist_ok=True)
 
-        http_asset = item.assets["http"]
-        local_file = download_dir / f"{item.granule_id}.nc"  # TODO improve download dir
+        # Download 02 product (radiance)
+        http_asset = item.assets["radiance"]["http"]
+        # Extract original filename from URL (e.g., VNP02MOD.A2025227.1354.002.2025227231707.nc)
+        radiance_filename = Path(http_asset.href).name
+        local_file = destination / radiance_filename
 
         result = self.downloader.download(
             uri=http_asset.href,
@@ -190,29 +196,21 @@ class VIIRSSource(DataSource):
             item_id=item.granule_id,
         )
 
-        log.debug("Saving granule metadata to: %s", download_dir)
-        item.local_path = local_file
-        item.to_file(download_dir)
-
-        # Download 03 product
-        download_dir = destination / f"{item.granule_id}" / "03"
-        download_dir.mkdir(parents=True, exist_ok=True)
-
-        goelocation_granule_id = self.convert_granule_id(item.granule_id, "03")
-        geolocation_item = self.get_by_id(goelocation_granule_id)
-
-        http_asset = geolocation_item.assets["http"]
-        local_file = download_dir / f"{geolocation_item.granule_id}.nc"  # TODO improve download dir
+        # Download 03 product (georeference)
+        http_asset = item.assets["georeference"]["http"]
+        # Extract original filename from URL (e.g., VNP03MOD.A2025227.1354.002.2025227224504.nc)
+        georeference_filename = Path(http_asset.href).name
+        local_file = destination / georeference_filename
 
         result = self.downloader.download(
             uri=http_asset.href,
             destination=local_file,
-            item_id=geolocation_item.granule_id,
+            item_id=item.granule_id,
         )
 
-        log.debug("Saving granule metadata to: %s", download_dir)
-        geolocation_item.local_path = local_file
-        geolocation_item.to_file(download_dir)
+        log.debug("Saving granule metadata to: %s", destination)
+        item.local_path = destination
+        item.to_file(destination)
 
         return result
 
@@ -312,9 +310,10 @@ class VIIRSL1BSource(VIIRSSource):
         self,
         *,
         downloader: Downloader,
-        short_name: str = "VNP02MOD",
+        short_name: str = "VNP02MOD",  # TODO make subclasses for the various products
         version: str | None = "2",
-        composite: str = "true_color",
+        composite: str = "all_bands",
+        resolution: int = 750,
         search_limit: int = 100,
     ):
         """Initialize VIIRS L1B source.
@@ -330,6 +329,7 @@ class VIIRSL1BSource(VIIRSSource):
             f"viirs-l1b-{short_name.lower()}",
             reader="viirs_l1b",
             default_composite=composite,
+            default_resolution=resolution,
             downloader=downloader,
             short_name=short_name,
             version=version,
