@@ -259,7 +259,7 @@ class VIIRSSource(DataSource):
                     datasets_to_remove.append(dataset_name)
                     log.warning(
                         f"Skipping dataset '{dataset_name}' for granule {item.granule_id}: "
-                        "dataset requires different day/night condition (data is {day_night_flag})"
+                        f"dataset requires different day/night condition (data is {day_night_flag})"
                     )
 
             # Remove incompatible datasets
