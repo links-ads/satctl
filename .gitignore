@@ -215,3 +215,4 @@ outputs/
 
 # ignore configs
 config.yml
+.claude/

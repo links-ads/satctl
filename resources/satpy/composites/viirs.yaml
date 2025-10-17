@@ -1,0 +1,104 @@
+sensor_name: visir/viirs
+
+modifiers:
+  sunz_corrected:
+    modifier: !!python/name:satpy.modifiers.SunZenithCorrector
+    prerequisites:
+    - name: solar_zenith_angle
+      resolution: 742
+
+  sunz_corrected_iband:
+    modifier: !!python/name:satpy.modifiers.SunZenithCorrector
+    prerequisites:
+    - name: solar_zenith_angle
+      resolution: 371
+
+# Composites split into day / night for moderate (M) and high-res imagery (I) bands.
+# - Day composites include reflective bands (need sun-zenith correction) and also include emissive TEBs
+#   since TEBs are usable day & night.
+# - Night composites include only emissive/thermal bands (TEBs) and the DNB where relevant.
+#
+# NOTE: M06 and M09 are included here for completeness but some pipelines or archived subsets
+# may omit them; remove if your ingestion doesn't produce those channels.
+
+composites:
+  all_bands_m_day:
+    # Moderate-resolution composite for daytime use:
+    # includes all moderate reflective RSBs (M01-M11) with sun-zenith correction,
+    # plus the thermal emissive bands (M11-M16) (no sun-zenith modifiers for TEBs).
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: M01
+      modifiers: [sunz_corrected]
+    - name: M02
+      modifiers: [sunz_corrected]
+    - name: M03
+      modifiers: [sunz_corrected]
+    - name: M04
+      modifiers: [sunz_corrected]
+    - name: M05
+      modifiers: [sunz_corrected]
+    - name: M06
+      modifiers: [sunz_corrected]
+    - name: M07
+      modifiers: [sunz_corrected]
+    - name: M08
+      modifiers: [sunz_corrected]
+    - name: M09
+      modifiers: [sunz_corrected]
+    - name: M10
+      modifiers: [sunz_corrected]
+    - name: M11
+      modifiers: [sunz_corrected]   # M11 is a crossover band (shortwave/near-TEB) — included for day with sunz correction
+    - name: M12
+    - name: M13
+    - name: M14
+    - name: M15
+    - name: M16
+    standard_name: all_bands_m_day
+
+  all_bands_m_night:
+    # Moderate-resolution composite for nighttime use:
+    # only thermal/emissive bands (M11-M16) are meaningful at night; M11 included as crossover.
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: M11
+    - name: M12
+    - name: M13
+    - name: M14
+    - name: M15
+    - name: M16
+    standard_name: all_bands_m_night
+
+  all_bands_h_day:
+    # High-resolution imagery composite for daytime use:
+    # includes reflective high-res I-bands (I01-I03) with high-res sun-zenith correction,
+    # and includes imagery thermal bands (I04-I05) which are usable day & night.
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: I01
+      modifiers: [sunz_corrected_iband]
+    - name: I02
+      modifiers: [sunz_corrected_iband]
+    - name: I03
+      modifiers: [sunz_corrected_iband]
+    - name: I04
+    - name: I05
+    standard_name: all_bands_h_day
+
+  all_bands_h_night:
+    # High-resolution imagery composite for nighttime use:
+    # only thermal imagery bands (I04, I05) are meaningful at night;
+    # DNB is handled as a separate composite below (but could be added here if desired).
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: I04
+    - name: I05
+    standard_name: all_bands_h_night
+
+  dnb:
+    # Day/Night Band (separate product; wide dynamic range VNIR). Kept as its own composite.
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: DNB
+    standard_name: dnb
