@@ -222,22 +222,6 @@ class VIIRSSource(DataSource):
         params: ConversionParams,
         force: bool = False,
     ) -> dict[str, list]:
-        """Process and save a single VIIRS granule.
-
-        Args:
-            item (Granule): Granule to process
-            destination (Path): Output directory
-            writer (Writer): Writer for output format
-            params (ConversionParams): Processing parameters
-            force (bool, optional): Force overwrite existing files. Defaults to False.
-
-        Returns:
-            dict[str, list]: Dictionary mapping granule_id to output file paths
-
-        Raises:
-            FileNotFoundError: If source files don't exist
-            ValueError: If required parameters are missing
-        """
         if item.local_path is None or not item.local_path.exists():
             raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
 
@@ -312,24 +296,15 @@ class VIIRSL1BSource(VIIRSSource):
         downloader: Downloader,
         short_name: str = "VNP02MOD",  # TODO make subclasses for the various products
         version: str | None = "2",
-        composite: str = "all_bands",
-        resolution: int = 750,
+        default_composite: str = "all_bands_m",
+        default_resolution: int = 750,
         search_limit: int = 100,
     ):
-        """Initialize VIIRS L1B source.
-
-        Args:
-            downloader (Downloader): Downloader instance
-            short_name (str, optional): Product short name. Defaults to "VNP02MOD".
-            version (str | None, optional): Product version. Defaults to None.
-            composite (str, optional): Default composite. Defaults to "true_color".
-            search_limit (int, optional): Maximum search results. Defaults to 100.
-        """
         super().__init__(
             f"viirs-l1b-{short_name.lower()}",
             reader="viirs_l1b",
-            default_composite=composite,
-            default_resolution=resolution,
+            default_composite=default_composite,
+            default_resolution=default_resolution,
             downloader=downloader,
             short_name=short_name,
             version=version,
@@ -337,19 +312,6 @@ class VIIRSL1BSource(VIIRSSource):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
-        """Parse VIIRS L1B granule name.
-
-        Uses same format as SDR products.
-
-        Args:
-            name (str): Granule name
-
-        Returns:
-            ProductInfo: Parsed product information
-
-        Raises:
-            ValueError: If name format is invalid
-        """
         parsed = self._parse_granule_id(name)
         # Date format: A2025189 -> need to strip 'A' prefix for datetime parsing
         date_str = parsed.date[1:]  # Remove 'A' prefix
