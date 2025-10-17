@@ -1,0 +1,102 @@
+sensor_name: visir/viirs
+
+modifiers:
+  sunz_corrected:
+    modifier: !!python/name:satpy.modifiers.SunZenithCorrector
+    prerequisites:
+    - name: solar_zenith_angle
+      resolution: 742
+
+  sunz_corrected_iband:
+    modifier: !!python/name:satpy.modifiers.SunZenithCorrector
+    prerequisites:
+    - name: solar_zenith_angle
+      resolution: 371
+
+composites:
+  all_bands:
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: M01
+      modifiers: [sunz_corrected]
+    - name: M02
+      modifiers: [sunz_corrected]
+    - name: M03
+      modifiers: [sunz_corrected]
+    - name: M04
+      modifiers: [sunz_corrected]
+    - name: M05
+      modifiers: [sunz_corrected]
+    - name: M06
+      modifiers: [sunz_corrected]
+    - name: M07
+      modifiers: [sunz_corrected]
+    - name: M08
+      modifiers: [sunz_corrected]
+    - name: M09
+      modifiers: [sunz_corrected]
+    - name: M10
+      modifiers: [sunz_corrected]
+    - name: M11
+      modifiers: [sunz_corrected]
+    - M12
+    - M13
+    - M14
+    - M15
+    - M16
+    - name: I01
+      modifiers: [sunz_corrected_iband]
+    - name: I02
+      modifiers: [sunz_corrected_iband]
+    - name: I03
+      modifiers: [sunz_corrected_iband]
+    - I04
+    - I05
+    - DNB
+    standard_name: all_bands
+
+  all_bands_m:
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: M01
+      modifiers: [sunz_corrected]
+    - name: M02
+      modifiers: [sunz_corrected]
+    - name: M03
+      modifiers: [sunz_corrected]
+    - name: M04
+      modifiers: [sunz_corrected]
+    - name: M05
+      modifiers: [sunz_corrected]
+    - name: M06
+      modifiers: [sunz_corrected]
+    - name: M07
+      modifiers: [sunz_corrected]
+    - name: M08
+      modifiers: [sunz_corrected]
+    - name: M09
+      modifiers: [sunz_corrected]
+    - name: M10
+      modifiers: [sunz_corrected]
+    - name: M11
+      modifiers: [sunz_corrected]
+    - M12
+    - M13
+    - M14
+    - M15
+    - M16
+    - DNB
+    standard_name: all_bands_m
+
+  all_bands_h:
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: I01
+      modifiers: [sunz_corrected_iband]
+    - name: I02
+      modifiers: [sunz_corrected_iband]
+    - name: I03
+      modifiers: [sunz_corrected_iband]
+    - I04
+    - I05
+    standard_name: all_bands_h
