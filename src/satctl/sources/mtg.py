@@ -16,7 +16,8 @@ from pystac_client import Client
 from xarray import DataArray
 
 from satctl.downloaders import Downloader, eumetsat
-from satctl.model import ConversionParams, Granule, ProductInfo, ProgressEventType, SearchParams
+from satctl.model import (ConversionParams, Granule, ProductInfo,
+                          ProgressEventType, SearchParams)
 from satctl.progress.events import emit_event
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
@@ -83,9 +84,9 @@ class MTGSource(DataSource):
             items.extend(
                 [
                     Granule(
-                        granule_id=i._id,
-                        source=str(i.collection),  # or i.instrument ?
-                        assets={i._id: i.url},
+                        granule_id=str(i),
+                        source=str(i.collection),  
+                        assets={str(i): i.url},
                         info=ProductInfo(
                             instrument=i.instrument,
                             level="",
