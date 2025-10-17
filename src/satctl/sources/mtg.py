@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 
 class MTGAsset(BaseModel):
-    url: str
+    href: str
 
 
 class MTGSource(DataSource):
@@ -86,7 +86,7 @@ class MTGSource(DataSource):
                     Granule(
                         granule_id=str(i),
                         source=str(i.collection),  
-                        assets={"product": i.url},
+                        assets={"product": MTGAsset(href=i.url)},
                         info=ProductInfo(
                             instrument=i.instrument,
                             level="",
@@ -108,10 +108,37 @@ class MTGSource(DataSource):
         raise NotImplementedError()
 
     def validate(self, item: Granule) -> None:
-        raise NotImplementedError()
+        """Validates a MTG Product item.
+
+        Args:
+            item (Granule): Product item to validate
+        """
+        for name, asset in item.assets.items():
+            asset = cast(MTGAsset, asset)
+            assert "access_token=" in asset.href, "The URL does not contain the 'access_token' query parameter."
 
     def download_item(self, item: Granule, destination: Path) -> bool:
-        raise NotImplementedError()
+        self.validate(item)
+        zip_asset = cast(MTGAsset, item.assets["product"])
+        local_file = destination / f"{item.granule_id}.zip"
+        if result := self.downloader.download(
+            uri=zip_asset.href,
+            destination=local_file,
+            item_id=item.granule_id,
+        ):
+            # extract to uniform with other sources
+            local_path = extract_zip(
+                zip_path=local_file,
+                extract_to=destination / f"{item.granule_id}.MTG",
+                item_id=item.granule_id
+            )
+            item.local_path = local_path
+            log.debug("Saving granule metadata to: %s", local_path)
+            item.to_file(local_path)
+            local_file.unlink()  # delete redundant zip
+        else:
+            log.warning("Failed to download: %s", item.granule_id)
+        return result
 
     def download(
         self,
@@ -119,7 +146,52 @@ class MTGSource(DataSource):
         destination: Path,
         num_workers: int | None = None,
     ) -> tuple[list, list]:
-        raise NotImplementedError()
+        # check output folder exists, make sure items is iterable
+        destination.mkdir(parents=True, exist_ok=True)
+        if not isinstance(items, Iterable):
+            items = [items]
+        items = cast(list, items)
+        success = []
+        failure = []
+        num_workers = num_workers or 1
+        batch_id = str(uuid.uuid4())
+        emit_event(
+            ProgressEventType.BATCH_STARTED,
+            task_id=batch_id,
+            total_items=len(items),
+            description=self.collections[0],
+        )
+        self.downloader.init()
+        executor = None
+        try:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
+                for future in as_completed(future2item):
+                    item = future2item[future]
+                    result = future.result()
+                    if result:
+                        success.append(item)
+                    else:
+                        failure.append(item)
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            return success, failure
+        except KeyboardInterrupt:
+            log.info("Interrupted, cleaning up...")
+            if executor:
+                executor.shutdown(wait=False, cancel_futures=True)
+        finally:
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            return success, failure
 
     def save_item(
         self,
