@@ -104,10 +104,6 @@ class VIIRSSource(DataSource):
         timestamp = "*" if wildcard_timestamp else parsed.timestamp
         return f"{parsed.instrument}{target_product}{parsed.product_type}.{parsed.date}.{parsed.time}.{parsed.version}.{timestamp}"
 
-    def get_downloader_init_kwargs(self) -> dict:
-        """Provide EarthData session to downloader initialization."""
-        return {"session": self.downloader.auth.auth_session}
-
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Searching for VIIRS data using earthaccess")
 
