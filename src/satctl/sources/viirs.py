@@ -208,27 +208,29 @@ class VIIRSSource(DataSource):
         radiance_filename = Path(http_asset.href).name
         local_file = destination / radiance_filename
 
-        result = self.downloader.download(
+        if result := self.downloader.download(
             uri=http_asset.href,
             destination=local_file,
             item_id=item.granule_id,
-        )
+        ):
+            # Download 03 product (georeference)
+            http_asset = item.assets["georeference"]["http"]
+            # Extract original filename from URL (e.g., VNP03MOD.A2025227.1354.002.2025227224504.nc)
+            georeference_filename = Path(http_asset.href).name
+            local_file = destination / georeference_filename
 
-        # Download 03 product (georeference)
-        http_asset = item.assets["georeference"]["http"]
-        # Extract original filename from URL (e.g., VNP03MOD.A2025227.1354.002.2025227224504.nc)
-        georeference_filename = Path(http_asset.href).name
-        local_file = destination / georeference_filename
-
-        result = self.downloader.download(
-            uri=http_asset.href,
-            destination=local_file,
-            item_id=item.granule_id,
-        )
-
-        log.debug("Saving granule metadata to: %s", destination)
-        item.local_path = destination
-        item.to_file(destination)
+            if result := self.downloader.download(
+                uri=http_asset.href,
+                destination=local_file,
+                item_id=item.granule_id,
+            ):
+                log.debug(f"Saving granule metadata to: {destination}")
+                item.local_path = destination
+                item.to_file(destination)
+            else:
+                log.warning(f"Failed to download georeference component: {item.granule_id}")
+        else:
+            log.warning(f"Failed to download radiance component: {item.granule_id}")
 
         return result
 
