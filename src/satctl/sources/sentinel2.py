@@ -7,10 +7,11 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from pydantic import BaseModel
 from pystac_client import Client
+from satpy.scene import Scene
 from xarray import DataArray
 
 from satctl.downloaders import Downloader
@@ -145,6 +146,39 @@ class Sentinel2Source(DataSource):
                 "application/json",
                 "text/plain",
             )
+
+    def load_scene(
+        self,
+        item: Granule,
+        datasets: list[str] | None = None,
+        generate: bool = False,
+        calibration: str = "counts",
+        **scene_options: dict[str, Any],
+    ) -> Scene:
+        """Load a Sentinel-2 scene with specified calibration.
+
+        Args:
+            item (Granule): Granule to load
+            datasets (list[str] | None): List of datasets/composites to load
+            generate (bool): Whether to generate composites
+            calibration (str): Calibration type - 'counts' (DN 0-10000, default) or 'reflectance' (percentage 0-100%)
+            **scene_options: Additional scene options
+
+        Returns:
+            Scene: Loaded satpy Scene object
+        """
+        if not datasets:
+            if self.default_composite is None:
+                raise ValueError("Please provide the source with a default composite, or provide custom composites")
+            datasets = [self.default_composite]
+        scene = Scene(
+            filenames=self.get_files(item),
+            reader=self.reader,
+            reader_kwargs=scene_options,
+        )
+        # Load with specified calibration
+        scene.load(datasets, calibration=calibration)
+        return scene
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         """Download only the specified assets to destination/item.granule_id.
