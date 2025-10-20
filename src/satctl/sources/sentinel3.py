@@ -84,7 +84,7 @@ class Sentinel3Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str, **kwargs) -> Granule:
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
