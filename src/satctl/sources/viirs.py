@@ -253,6 +253,19 @@ class VIIRSSource(DataSource):
         datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
         log.debug("Attempting to save the following datasets: %s", datasets_dict)
 
+        # Check for automatic dataset selection
+        auto_select = False
+        automatic_keys = [key for key in datasets_dict.keys() if key.lower() == "automatic"]
+
+        if automatic_keys:
+            if len(datasets_dict) > 1:
+                raise ValueError(
+                    "Cannot mix 'automatic' with other datasets. "
+                    "Either use 'automatic' alone or specify explicit datasets."
+                )
+            auto_select = True
+            log.debug("Automatic dataset selection enabled")
+
         # Skip existing files unless forced
         if not force:
             for dataset_name, file_name in list(datasets_dict.items()):
@@ -272,8 +285,30 @@ class VIIRSSource(DataSource):
         with xr.open_dataset(files[0]) as ds:
             day_night_flag = str(ds.attrs.get("DayNightFlag", "Not found")).lower()
 
-        # Remove datasets that don't match the day/night condition
-        if day_night_flag in ("day", "night"):
+        # Handle automatic dataset selection
+        if auto_select:
+            # Determine product type from granule_id (MOD or IMG)
+            parsed = self._parse_granule_id(item.granule_id)
+            product_type = parsed.product_type
+
+            # Default to day if flag is not recognized
+            if day_night_flag not in ("day", "night"):
+                log.debug(f"DayNightFlag '{day_night_flag}' not recognized for {item.granule_id}, defaulting to 'day'")
+                day_night_flag = "day"
+
+            # Map product type and day/night flag to correct composite
+            if product_type == "MOD":
+                selected_composite = f"all_bands_m_{day_night_flag}"
+            elif product_type == "IMG":
+                selected_composite = f"all_bands_h_{day_night_flag}"
+            else:
+                raise ValueError(f"Unknown product type '{product_type}' for automatic dataset selection")
+
+            datasets_dict = writer.parse_datasets(selected_composite)
+            log.debug(f"Automatically selected dataset: {selected_composite}")
+
+        # Remove datasets that don't match the day/night condition (for explicit dataset selection)
+        elif day_night_flag in ("day", "night"):
             datasets_to_remove = []
             for dataset_name in datasets_dict.keys():
                 if day_night_flag not in dataset_name.lower():
@@ -390,7 +425,7 @@ class VNP02MODSource(VIIRSL1BSource):
             downloader=downloader,
             short_name="VNP02MOD",
             version="2",
-            default_composite="all_bands_m_day",
+            default_composite="automatic",
             default_resolution=750,
             search_limit=search_limit,
         )
@@ -407,7 +442,7 @@ class VJ102MODSource(VIIRSL1BSource):
             downloader=downloader,
             short_name="VJ102MOD",
             version="2.1",
-            default_composite="all_bands_m_day",
+            default_composite="automatic",
             default_resolution=750,
             search_limit=search_limit,
         )
@@ -424,7 +459,7 @@ class VJ202MODSource(VIIRSL1BSource):
             downloader=downloader,
             short_name="VJ202MOD",
             version="2.1",
-            default_composite="all_bands_m_day",
+            default_composite="automatic",
             default_resolution=750,
             search_limit=search_limit,
         )
@@ -444,7 +479,7 @@ class VNP02IMGSource(VIIRSL1BSource):
             downloader=downloader,
             short_name="VNP02IMG",
             version="2",
-            default_composite="all_bands_h_day",
+            default_composite="automatic",
             default_resolution=375,
             search_limit=search_limit,
         )
@@ -461,7 +496,7 @@ class VJ102IMGSource(VIIRSL1BSource):
             downloader=downloader,
             short_name="VJ102IMG",
             version="2.1",
-            default_composite="all_bands_h_day",
+            default_composite="automatic",
             default_resolution=375,
             search_limit=search_limit,
         )
@@ -478,7 +513,7 @@ class VJ202IMGSource(VIIRSL1BSource):
             downloader=downloader,
             short_name="VJ202IMG",
             version="2.1",
-            default_composite="all_bands_h_day",
+            default_composite="automatic",
             default_resolution=375,
             search_limit=search_limit,
         )
