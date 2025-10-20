@@ -168,10 +168,22 @@ class VIIRSSource(DataSource):
         return items
 
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
-        item = earthaccess.search_data(
-            short_name=kwargs.get("short_name"),
-            granule_name=item_id,
-        )[0]
+        short_name = kwargs.get("short_name")
+        if not short_name:
+            raise ValueError("short_name must be provided in kwargs for get_by_id")
+        try:
+            results = earthaccess.search_data(
+                short_name=short_name,
+                granule_name=item_id,
+            )
+
+            if not results:
+                raise ValueError(f"No granule found with id: {item_id}")
+            item = results[0]
+
+        except Exception as e:
+            log.error(f"Failed to fetch granule {item_id}: {e}")
+            raise
 
         item_id = item["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
 
