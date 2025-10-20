@@ -23,8 +23,8 @@ class S3Authenticator(Authenticator):
         client_id: str,
         username: str,
         password: str,
+        endpoint_url: str,
         s3_credentials_url: str | None = None,
-        endpoint_url: str = "https://eodata.dataspace.copernicus.eu",
         use_temp_credentials: bool = True,
     ):
         """
@@ -184,7 +184,6 @@ class S3Authenticator(Authenticator):
             return False
 
         if self.s3_expiration:
-            # Add 5 minute buffer before expiration
             now = datetime.now(timezone.utc)
             if now >= self.s3_expiration:
                 log.debug("S3 credentials expired")
