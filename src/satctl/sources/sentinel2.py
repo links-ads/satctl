@@ -449,6 +449,7 @@ class Sentinel2Source(DataSource):
 class Sentinel2L2ASource(Sentinel2Source):
     """Source for Sentinel-2 MSI L2A product."""
 
+    # L2A assets have resolution suffixes (_10m, _20m, _60m)
     REQUIRED_ASSETS: set[str] = {
         "AOT_10m",
         "B01_60m",
@@ -464,6 +465,13 @@ class Sentinel2L2ASource(Sentinel2Source):
         "B12_20m",
         "B8A_20m",
         "WVP_20m",
+    }
+
+    # L2A metadata assets
+    METADATA_ASSETS: set[str] = {
+        "safe_manifest",
+        "granule_metadata",
+        "product_metadata",
     }
 
     def __init__(
@@ -507,6 +515,30 @@ class Sentinel2L2ASource(Sentinel2Source):
 class Sentinel2L1CSource(Sentinel2Source):
     """Source for Sentinel-2 MSI L1C product."""
 
+    # L1C assets don't have resolution suffixes and include TCI
+    REQUIRED_ASSETS: set[str] = {
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B09",
+        "B11",
+        "B12",
+        "B8A",
+    }
+
+    # L1C metadata assets (different from L2A)
+    METADATA_ASSETS: set[str] = {
+        "safe_manifest",
+        "granule_metadata",
+        "product_metadata",
+        "datastrip_metadata",
+    }
+
     def __init__(
         self,
         *,
@@ -521,6 +553,7 @@ class Sentinel2L1CSource(Sentinel2Source):
             "sentinel-2-l1c",
             reader="msi_safe",
             default_composite=composite,
+            default_resolution=10,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,
