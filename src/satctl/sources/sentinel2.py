@@ -4,7 +4,6 @@ import uuid
 import warnings
 from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +17,6 @@ from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, ProgressEventType, SearchParams
 from satctl.progress.events import emit_event
 from satctl.sources import DataSource
-from satctl.utils import extract_zip
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
@@ -31,6 +29,32 @@ class S2Asset(BaseModel):
 
 class Sentinel2Source(DataSource):
     """Source for Sentinel-2 MSI product."""
+
+    # Static class variables for required assets
+    REQUIRED_ASSETS: set[str] = {
+        "AOT_10m",
+        "B01_60m",
+        "B02_10m",
+        "B03_10m",
+        "B04_10m",
+        "B05_20m",
+        "B06_20m",
+        "B07_20m",
+        "B08_10m",
+        "B09_60m",
+        "B10_60m",
+        "B11_20m",
+        "B12_20m",
+        "B8A_20m",
+        "WVP_20m",
+    }
+
+    # Static class variables for metadata assets
+    METADATA_ASSETS: set[str] = {
+        "safe_manifest",
+        "granule_metadata",
+        "product_metadata",
+    }
 
     def __init__(
         self,
@@ -90,8 +114,19 @@ class Sentinel2Source(DataSource):
     def get_files(self, item: Granule) -> list[Path | str]:
         if item.local_path is None:
             raise ValueError("Local path is missing. Did you download this granule?")
-        # For MSI SAFE reader, pass all files recursively
-        return list(item.local_path.rglob("*"))
+        # Check if SAFE structure exists
+        granule_dir = item.local_path / "GRANULE"
+        manifest_file = item.local_path / "manifest.safe"
+
+        if granule_dir.exists() and manifest_file.exists():
+            # SAFE structure detected - return all files recursively
+            # Filter out directories and non-data files
+            all_files = [f for f in item.local_path.rglob("*") if f.is_file()]
+            # Exclude _granule.json metadata file
+            all_files = [f for f in all_files if f.name != "_granule.json"]
+            return all_files
+        else:
+            raise ValueError("SAFE structure not found")
 
     def validate(self, item: Granule) -> None:
         """Validates a Sentinel2 STAC item.
@@ -110,43 +145,87 @@ class Sentinel2Source(DataSource):
                 "application/json",
                 "text/plain",
             )
-            if asset.media_type == "application/zip":
-                assert name == "Product"
 
     def download_item(self, item: Granule, destination: Path) -> bool:
-        """Download single item - can be called in thread pool.
+        """Download only the specified assets to destination/item.granule_id.
 
         Args:
             item (Granule): Sentinel-2 MSI product to download.
             destination (Path): Path to the destination directory.
 
         Returns:
-            bool: True if the item was downloaded successfully, False otherwise.
+            bool: True if all specified assets were downloaded successfully, False otherwise.
         """
         self.validate(item)
-        zip_asset = cast(S2Asset, item.assets["Product"])
-        log.info("Downloading product %s", zip_asset.href)
 
-        local_file = destination / f"{item.granule_id}.zip"
-        if result := self.downloader.download(
-            uri=zip_asset.href,
-            destination=local_file,
-            item_id=item.granule_id,
-        ):
-            # extract to uniform with other sources
-            local_path = extract_zip(
-                zip_path=local_file,
-                extract_to=destination,
+        # Create directory with .SAFE extension for msi_safe reader compatibility
+        local_path = destination / f"{item.granule_id}.SAFE"
+        local_path.mkdir(parents=True, exist_ok=True)
+
+        all_success = True
+
+        # Download band files and preserve SAFE directory structure
+        for asset_name in self.REQUIRED_ASSETS:
+            asset = item.assets.get(asset_name)
+            if asset is None:
+                log.warning("Missing asset '%s' for granule %s", asset_name, item.granule_id)
+                all_success = False
+                continue
+            asset = cast(S2Asset, asset)
+
+            # Extract the relative path from S3 URI to preserve SAFE structure
+            href_parts = asset.href.split(".SAFE/")
+            if len(href_parts) > 1 and "GRANULE" in href_parts[1]:
+                # Preserve the SAFE structure for proper msi_safe reader support
+                relative_path = href_parts[1]  # e.g., GRANULE/L2A_.../IMG_DATA/R10m/file.jp2
+                target_file = local_path / relative_path
+            else:
+                # Fallback to flat structure if pattern not found
+                target_file = local_path / (asset_name + Path(asset.href).suffix)
+
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            result = self.downloader.download(
+                uri=asset.href,
+                destination=target_file,
                 item_id=item.granule_id,
-                expected_dir=f"{item.granule_id}.SAFE",
             )
+            if not result:
+                log.warning("Failed to download asset %s for granule %s", asset_name, item.granule_id)
+                all_success = False
+
+        # Download metadata files required by msi_safe reader
+        for metadata_name in self.METADATA_ASSETS:
+            metadata = item.assets.get(metadata_name)
+            if metadata is None:
+                log.debug("Missing metadata '%s' for granule %s", metadata_name, item.granule_id)
+                continue
+            metadata = cast(S2Asset, metadata)
+
+            # Extract relative path from S3 URI
+            href_parts = metadata.href.split(".SAFE/")
+            if len(href_parts) > 1:
+                relative_path = href_parts[1]
+                target_file = local_path / relative_path
+            else:
+                # Fallback
+                target_file = local_path / Path(metadata.href).name
+
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            result = self.downloader.download(
+                uri=metadata.href,
+                destination=target_file,
+                item_id=item.granule_id,
+            )
+            if not result:
+                log.debug("Failed to download metadata %s for granule %s", metadata_name, item.granule_id)
+
+        if all_success:
             item.local_path = local_path
             log.debug("Saving granule metadata to: %s", local_path)
             item.to_file(local_path)
-            local_file.unlink()  # delete redundant zip
         else:
-            log.warning("Failed to download: %s", item.granule_id)
-        return result
+            log.warning("Failed to download all required assets for: %s", item.granule_id)
+        return all_success
 
     def download(
         self,
@@ -336,6 +415,23 @@ class Sentinel2Source(DataSource):
 class Sentinel2L2ASource(Sentinel2Source):
     """Source for Sentinel-2 MSI L2A product."""
 
+    REQUIRED_ASSETS: set[str] = {
+        "AOT_10m",
+        "B01_60m",
+        "B02_10m",
+        "B03_10m",
+        "B04_10m",
+        "B05_20m",
+        "B06_20m",
+        "B07_20m",
+        "B08_10m",
+        "B09_60m",
+        "B11_20m",
+        "B12_20m",
+        "B8A_20m",
+        "WVP_20m",
+    }
+
     def __init__(
         self,
         *,
@@ -350,6 +446,7 @@ class Sentinel2L2ASource(Sentinel2Source):
             "sentinel-2-l2a",
             reader="msi_safe_l2a",
             default_composite=composite,
+            default_resolution=10,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,
