@@ -68,7 +68,6 @@ class EarthDataAuthenticator(Authenticator):
         """
         Note: earthaccess handles authentication internally,
         so we don't need to provide explicit headers.
-        TODO: evaluate whether some other headers might be needed.
         """
         self.ensure_authenticated()
         return {}
