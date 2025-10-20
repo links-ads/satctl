@@ -78,4 +78,4 @@ class EarthDataAuthenticator(Authenticator):
         session_name = f"get_{self.mode}_session"
         if not hasattr(earthaccess, session_name):
             raise ValueError(f"earthaccess does not support mode: {self.mode}")
-        return getattr(earthaccess, session_name)
+        return getattr(earthaccess, session_name)()
