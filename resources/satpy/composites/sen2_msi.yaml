@@ -1,4 +1,4 @@
-sensor_name: visir/msi
+sensor_name: visir/sen2_msi
 
 modifiers:
   nir_reflectance:
@@ -18,123 +18,81 @@ composites:
     compositor: !!python/name:satpy.composites.core.GenericCompositor
     prerequisites:
     - name: B04
-      resolution: 10
     - name: B03
-      resolution: 10
     - name: B02
-      resolution: 10
     standard_name: true_color
 
   false_color:
     compositor: !!python/name:satpy.composites.core.GenericCompositor
     prerequisites:
     - name: B08
-      resolution: 10
     - name: B04
-      resolution: 10
     - name: B03
-      resolution: 10
     standard_name: false_color
 
   all_bands_10m:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites:
     - name: B02
-      resolution: 10
     - name: B03
-      resolution: 10
     - name: B04
-      resolution: 10
     - name: B08
-      resolution: 10
     standard_name: all_bands_10m
 
   all_bands_20m:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites:
     - name: B05
-      resolution: 20
     - name: B06
-      resolution: 20
     - name: B07
-      resolution: 20
     - name: B8A
-      resolution: 20
     - name: B11
-      resolution: 20
     - name: B12
-      resolution: 20
     standard_name: all_bands_20m
 
   all_bands_60m:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites:
     - name: B01
-      resolution: 60
     - name: B09
-      resolution: 60
     standard_name: all_bands_60m
 
   all_bands:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites:
     - name: B01
-      resolution: 60
     - name: B02
-      resolution: 10
     - name: B03
-      resolution: 10
     - name: B04
-      resolution: 10
     - name: B05
-      resolution: 20
     - name: B06
-      resolution: 20
     - name: B07
-      resolution: 20
     - name: B08
-      resolution: 10
     - name: B8A
-      resolution: 20
     - name: B09
-      resolution: 60
     - name: B11
-      resolution: 20
     - name: B12
-      resolution: 20
     standard_name: all_bands
 
   vegetation_index:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites:
     - name: B08
-      resolution: 10
     - name: B04
-      resolution: 10
     - name: B03
-      resolution: 10
     - name: B05
-      resolution: 20
     - name: B06
-      resolution: 20
     - name: B07
-      resolution: 20
     - name: B8A
-      resolution: 20
     - name: B11
-      resolution: 20
     - name: B12
-      resolution: 20
     standard_name: vegetation_index
 
   swir:
     compositor: !!python/name:satpy.composites.core.GenericCompositor
     prerequisites:
     - name: B12
-      resolution: 20
     - name: B8A
-      resolution: 20
     - name: B04
-      resolution: 10
     standard_name: swir
 
