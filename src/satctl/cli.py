@@ -99,6 +99,9 @@ def convert(
     writer_name: Annotated[
         str, typer.Option("--writer", "-w", help="Which writer to use to save results")
     ] = "geotiff",
+    num_workers: Annotated[
+        int | None, typer.Option("--num-workers", "-nw", help="Workers count for parallel processing")
+    ] = None,
 ):
     from satctl.model import ConversionParams, Granule
     from satctl.sources import create_source, registry
@@ -139,6 +142,7 @@ def convert(
                 destination=output_subdir,
                 writer=writer,
                 force=force_conversion,
+                num_workers=num_workers,
             )
         else:
             typer.echo(f"Warning: No data found for {source_name} in {source_subdir}")

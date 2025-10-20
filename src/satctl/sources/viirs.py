@@ -94,7 +94,7 @@ class VIIRSSource(DataSource):
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
 
-    def convert_granule_id(
+    def convert_granule_id_with_wildcard(
         self,
         granule_id: str,
         target_product: str,
@@ -132,12 +132,14 @@ class VIIRSSource(DataSource):
 
         for rad_result in radiance_results:
             rad_id = rad_result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
-            geo_id = self.convert_granule_id(rad_id, "03")
+            geo_id = self.convert_granule_id_with_wildcard(rad_id, "03")
 
             geo_result = earthaccess.search_data(
                 short_name=self.short_name.replace("02", "03"),
                 granule_name=geo_id,
             )[0]
+
+            geo_id = geo_result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
 
             items.append(
                 Granule(
@@ -169,8 +171,27 @@ class VIIRSSource(DataSource):
 
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
-        raise NotImplementedError("TODO")
+    def get_by_id(self, item_id: str, **kwargs) -> Granule:
+        item = earthaccess.search_data(
+            short_name=kwargs.get("short_name"),
+            granule_name=item_id,
+        )[0]
+
+        item_id = item["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
+
+        return Granule(
+            granule_id=item_id,
+            source=self.collections[0],
+            assets={
+                self.asset_keys.get(str(k), "unknown"): VIIRSAsset(
+                    href=url["URL"],
+                    type=url["Type"],
+                    media_type=url["MimeType"],
+                )
+                for k, url in enumerate(item["umm"]["RelatedUrls"])
+            },
+            info=self._parse_item_name(item_id),
+        )
 
     def get_files(self, item: Granule) -> list[Path | str]:
         if item.local_path is None:
@@ -385,7 +406,7 @@ class VJ102MODSource(VIIRSL1BSource):
         super().__init__(
             downloader=downloader,
             short_name="VJ102MOD",
-            version="2",
+            version="2.1",
             default_composite="all_bands_m_day",
             default_resolution=750,
             search_limit=search_limit,
@@ -402,7 +423,7 @@ class VJ202MODSource(VIIRSL1BSource):
         super().__init__(
             downloader=downloader,
             short_name="VJ202MOD",
-            version="2",
+            version="2.1",
             default_composite="all_bands_m_day",
             default_resolution=750,
             search_limit=search_limit,
@@ -439,7 +460,7 @@ class VJ102IMGSource(VIIRSL1BSource):
         super().__init__(
             downloader=downloader,
             short_name="VJ102IMG",
-            version="2",
+            version="2.1",
             default_composite="all_bands_h_day",
             default_resolution=375,
             search_limit=search_limit,
@@ -456,7 +477,7 @@ class VJ202IMGSource(VIIRSL1BSource):
         super().__init__(
             downloader=downloader,
             short_name="VJ202IMG",
-            version="2",
+            version="2.1",
             default_composite="all_bands_h_day",
             default_resolution=375,
             search_limit=search_limit,
