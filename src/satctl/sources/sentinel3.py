@@ -30,7 +30,7 @@ class S3Asset(BaseModel):
 
 
 class Sentinel3Source(DataSource):
-    """Source for Sentinel-3 SLSTR L1B product."""
+    """Base source for Sentinel-3 products"""
 
     def __init__(
         self,
@@ -70,7 +70,7 @@ class Sentinel3Source(DataSource):
             collections=self.collections,
             intersects=params.area_geometry,
             datetime=(params.start, params.end),
-            limit=self.search_limit,
+            max_items=self.search_limit,
         )
         items = [
             Granule(
@@ -84,7 +84,7 @@ class Sentinel3Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str, **kwargs) -> Granule:
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
@@ -133,60 +133,6 @@ class Sentinel3Source(DataSource):
         else:
             log.warning("Failed to download: %s", item.granule_id)
         return result
-
-    def download(
-        self,
-        items: Granule | list[Granule],
-        destination: Path,
-        num_workers: int | None = None,
-    ) -> tuple[list, list]:
-        # check output folder exists, make sure items is iterable
-        destination.mkdir(parents=True, exist_ok=True)
-        if not isinstance(items, Iterable):
-            items = [items]
-        items = cast(list, items)
-
-        success = []
-        failure = []
-        num_workers = num_workers or 1
-        batch_id = str(uuid.uuid4())
-        emit_event(
-            ProgressEventType.BATCH_STARTED,
-            task_id=batch_id,
-            total_items=len(items),
-            description=self.collections[0],
-        )
-        self.downloader.init()
-        executor = None
-        try:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
-                for future in as_completed(future2item):
-                    item = future2item[future]
-                    result = future.result()
-                    if result:
-                        success.append(item)
-                    else:
-                        failure.append(item)
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
-        except KeyboardInterrupt:
-            log.info("Interrupted, cleaning up...")
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
-        finally:
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
 
     def save_item(
         self,
@@ -320,7 +266,8 @@ class SLSTRSource(Sentinel3Source):
         *,
         downloader: Downloader,
         stac_url: str,
-        composite: str = "all_bands_500m",
+        default_composite: str = "all_bands",
+        default_resolution: int = 1000,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
@@ -328,7 +275,8 @@ class SLSTRSource(Sentinel3Source):
         super().__init__(
             "sentinel-3-sl-1-rbt-ntc",
             reader="slstr_l1b",
-            default_composite=composite,
+            default_composite=default_composite,
+            default_resolution=default_resolution,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,
@@ -360,7 +308,8 @@ class OLCISource(Sentinel3Source):
         *,
         downloader: Downloader,
         stac_url: str,
-        composite: str = "all_bands_300m",
+        default_composite: str = "all_bands",
+        default_resolution: int = 300,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
@@ -368,7 +317,8 @@ class OLCISource(Sentinel3Source):
         super().__init__(
             "sentinel-3-olci-1-efr-ntc",
             reader="olci_l1b",
-            default_composite=composite,
+            default_composite=default_composite,
+            default_resolution=default_resolution,
             downloader=downloader,
             stac_url=stac_url,
             search_limit=search_limit,
