@@ -31,7 +31,7 @@ class HTTPDownloader(Downloader):
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
 
-    def init(self, session: requests.Session | None = None) -> None:
+    def init(self, session: requests.Session | None = None, **kwargs) -> None:
         if not session:
             session = requests.Session()
             adapter = HTTPAdapter(pool_connections=self.pool_conns, pool_maxsize=self.pool_size)
