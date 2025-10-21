@@ -71,6 +71,16 @@ class DataSource(ABC):
         force: bool = False,
     ) -> dict[str, list]: ...
 
+    def get_downloader_init_kwargs(self) -> dict:
+        """Hook method for subclasses to provide downloader initialization arguments.
+
+        Override this method in subclasses to pass custom arguments to downloader.init().
+
+        Returns:
+            dict: Keyword arguments to pass to downloader.init()
+        """
+        return {}
+
     def download(
         self,
         items: Granule | list[Granule],
@@ -93,7 +103,7 @@ class DataSource(ABC):
             total_items=len(items),
             description=self.collections[0],
         )
-        self.downloader.init()
+        self.downloader.init(**self.get_downloader_init_kwargs())
         executor = None
         try:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:

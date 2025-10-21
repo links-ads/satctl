@@ -4,20 +4,33 @@ import warnings
 from abc import abstractmethod
 from collections import defaultdict
 from datetime import datetime, timezone
+from itertools import product
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, TypedDict, cast
 
 import earthaccess
 import xarray as xr
 from pydantic import BaseModel
 from xarray import DataArray
 
+from satctl.auth.earthdata import EarthDataAuthenticator
 from satctl.downloaders import Downloader
+from satctl.downloaders.http import HTTPDownloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
+
+
+class ProductCombination(TypedDict):
+    """Configuration for a specific satellite/product_type combination."""
+
+    satellite: str
+    product_type: str
+    short_name: str
+    version: str
+    resolution: int
 
 
 class ParsedGranuleId(BaseModel):
@@ -91,6 +104,22 @@ class VIIRSSource(DataSource):
             timestamp=match.group(7),
         )
 
+    def _get_short_name_from_granule(self, granule_id: str) -> str:
+        """Extract the short_name from a granule ID.
+
+        Args:
+            granule_id: Full granule ID (e.g., "VNP02MOD.A2025227.1354.002.2025227231707")
+
+        Returns:
+            Short name (e.g., "VNP02MOD")
+
+        Example:
+            "VNP02MOD.A2025227.1354.002.2025227231707" -> "VNP02MOD"
+            "VJ102IMG.A2025189.0000.021.2025192163307" -> "VJ102IMG"
+        """
+        parsed = self._parse_granule_id(granule_id)
+        return f"{parsed.instrument}{parsed.level}{parsed.product_type}"
+
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
 
@@ -104,22 +133,35 @@ class VIIRSSource(DataSource):
         timestamp = "*" if wildcard_timestamp else parsed.timestamp
         return f"{parsed.instrument}{target_product}{parsed.product_type}.{parsed.date}.{parsed.time}.{parsed.version}.{timestamp}"
 
-    def search(self, params: SearchParams) -> list[Granule]:
-        log.debug("Searching for VIIRS data using earthaccess")
+    def _search_single_combination(
+        self,
+        short_name: str,
+        version: str | None,
+        params: SearchParams,
+    ) -> list[Granule]:
+        """Search for VIIRS granules for a single satellite/product combination.
 
+        Args:
+            short_name: NASA short name (e.g., "VNP02MOD", "VJ102IMG")
+            version: Product version (e.g., "2", "2.1")
+            params: Search parameters including time range and optional spatial filter
+
+        Returns:
+            List of granules for this combination
+        """
         search_kwargs: dict[str, Any] = {
-            "short_name": self.short_name,
+            "short_name": short_name,
             "temporal": (params.start.isoformat(), params.end.isoformat()),
             "count": self.search_limit,
         }
 
         # Add version if specified
-        if self.version:
-            search_kwargs["version"] = self.version
+        if version:
+            search_kwargs["version"] = version
 
         # Add spatial filter if provided
         if params.area_geometry:
-            search_kwargs["bounding_box"] = params.area_geometry.bounds  # TODO check if ok
+            search_kwargs["bounding_box"] = params.area_geometry.bounds
 
         log.debug("Searching with parameters: %s", search_kwargs)
         radiance_results = earthaccess.search_data(**search_kwargs)
@@ -131,7 +173,7 @@ class VIIRSSource(DataSource):
             geo_id = self.convert_granule_id_with_wildcard(rad_id, "03")
 
             geo_result = earthaccess.search_data(
-                short_name=self.short_name.replace("02", "03"),
+                short_name=short_name.replace("02", "03"),
                 granule_name=geo_id,
             )[0]
 
@@ -163,14 +205,21 @@ class VIIRSSource(DataSource):
                 )
             )
 
-        log.debug("Found %d items", len(items))
-
         return items
 
-    def get_by_id(self, item_id: str, **kwargs) -> Granule:
-        short_name = kwargs.get("short_name")
-        if not short_name:
-            raise ValueError("short_name must be provided in kwargs for get_by_id")
+    def _get_granule_by_short_name(self, item_id: str, short_name: str) -> Granule:
+        """Fetch a specific granule by ID and short_name.
+
+        Args:
+            item_id: The granule ID
+            short_name: NASA short name (e.g., "VNP02MOD")
+
+        Returns:
+            The requested granule
+
+        Raises:
+            ValueError: If granule not found
+        """
         try:
             results = earthaccess.search_data(
                 short_name=short_name,
@@ -206,12 +255,18 @@ class VIIRSSource(DataSource):
             raise ValueError("Local path is missing. Did you download this granule?")
         return list(item.local_path.glob("*.nc"))
 
-    def validate(self, item: Granule) -> None: ...
+    def validate(self, item: Granule) -> None:
+        raise NotImplementedError("Not implemented for VIIRS yet.")
+
+    def get_downloader_init_kwargs(self) -> dict:
+        """Provide EarthData session to downloader initialization."""
+        # Only provide session if we have HTTPDownloader with EarthDataAuthenticator
+        if isinstance(self.downloader, HTTPDownloader) and isinstance(self.downloader.auth, EarthDataAuthenticator):
+            return {"session": self.downloader.auth.auth_session}
+        return {}
 
     def download_item(self, item: Granule, destination: Path) -> bool:
-        self.validate(item)
-
-        destination = destination / f"{item.granule_id}"
+        destination = destination / item.granule_id
         destination.mkdir(parents=True, exist_ok=True)
 
         # Download 02 product (radiance)
@@ -383,29 +438,140 @@ class VIIRSSource(DataSource):
 class VIIRSL1BSource(VIIRSSource):
     """Source for VIIRS Level 1B products.
 
-    Supports geolocated radiance products.
+    Supports geolocated radiance products from different satellites and product types.
+    Accepts lists of satellites and product types, and will search for all combinations.
+
+    Args:
+        downloader: HTTP downloader instance
+        satellite: List of satellite platforms - ["vnp"] (Suomi-NPP), ["jp1"] (NOAA-20/JPSS-1), ["jp2"] (NOAA-21/JPSS-2)
+        product_type: List of product types - ["mod"] (M-bands, 750m), ["img"] (I-bands, 375m)
+        search_limit: Maximum number of granules to return in search results per combination
+
+    Examples:
+        # Single combination
+        satellite=["vnp"], product_type=["mod"] -> searches VNP02MOD
+
+        # Multiple satellites, single product type
+        satellite=["vnp", "jp1"], product_type=["mod"] -> searches VNP02MOD, VJ102MOD
+
+        # Single satellite, multiple product types
+        satellite=["vnp"], product_type=["mod", "img"] -> searches VNP02MOD, VNP02IMG
+
+        # All combinations (cartesian product)
+        satellite=["vnp", "jp1"], product_type=["mod", "img"] -> searches VNP02MOD, VNP02IMG, VJ102MOD, VJ102IMG
     """
 
     def __init__(
         self,
         *,
         downloader: Downloader,
-        short_name: str,
-        version: str | None = "2",
-        default_composite: str,
-        default_resolution: int,
+        satellite: list[Literal["vnp", "jp1", "jp2"]],
+        product_type: list[Literal["mod", "img"]],
         search_limit: int = 100,
     ):
+        # Map satellite to instrument prefix and version
+        satellite_config = {
+            "vnp": {"prefix": "VNP", "version": "2"},
+            "jp1": {"prefix": "VJ1", "version": "2.1"},
+            "jp2": {"prefix": "VJ2", "version": "2.1"},
+        }
+
+        # Map product type to resolution
+        product_config = {
+            "mod": {"resolution": 750},
+            "img": {"resolution": 375},
+        }
+
+        # Generate all combinations (cartesian product)
+        self.combinations: list[ProductCombination] = []
+        for sat, prod in product(satellite, product_type):
+            sat_cfg = satellite_config[sat]
+            prod_cfg = product_config[prod]
+            short_name = f"{sat_cfg['prefix']}02{prod.upper()}"
+
+            self.combinations.append(
+                ProductCombination(
+                    satellite=sat,
+                    product_type=prod,
+                    short_name=short_name,
+                    version=sat_cfg["version"],
+                    resolution=prod_cfg["resolution"],
+                )
+            )
+
+        # Use the first combination as the primary configuration for parent class
+        primary = self.combinations[0]
+
         super().__init__(
-            f"viirs-l1b-{short_name.lower()}",
+            "viirs-l1b",
             reader="viirs_l1b",
-            default_composite=default_composite,
-            default_resolution=default_resolution,
+            default_composite="automatic",
+            default_resolution=primary["resolution"],
             downloader=downloader,
-            short_name=short_name,
-            version=version,
+            short_name=primary["short_name"],
+            version=primary["version"],
             search_limit=search_limit,
         )
+
+    def search(self, params: SearchParams) -> list[Granule]:
+        """Search for VIIRS data across all configured satellite/product_type combinations.
+
+        Args:
+            params: Search parameters including time range and optional spatial filter
+
+        Returns:
+            List of granules from all combinations
+        """
+        log.debug("Searching for VIIRS data across %d combinations", len(self.combinations))
+
+        all_items = []
+
+        for combo in self.combinations:
+            log.debug(
+                "Searching combination: %s %s (short_name: %s)",
+                combo["satellite"],
+                combo["product_type"],
+                combo["short_name"],
+            )
+            items = self._search_single_combination(
+                short_name=combo["short_name"],
+                version=combo["version"],
+                params=params,
+            )
+            all_items.extend(items)
+
+        log.debug("Found %d total items across all combinations", len(all_items))
+        return all_items
+
+    def get_by_id(self, item_id: str, **_kwargs) -> Granule:
+        # Parse the granule_id to determine which combination it belongs to
+        try:
+            parsed = self._parse_granule_id(item_id)
+            # Reconstruct the short_name from parsed components
+            # e.g., VNP + 02 + MOD = VNP02MOD
+            short_name = f"{parsed.instrument}{parsed.level}{parsed.product_type}"
+
+            # Verify this combination is configured
+            matching_combo = None
+            for combo in self.combinations:
+                if combo["short_name"] == short_name:
+                    matching_combo = combo
+                    break
+
+            if not matching_combo:
+                configured = [c["short_name"] for c in self.combinations]
+                raise ValueError(
+                    f"Granule ID '{item_id}' has short_name '{short_name}' which is not in the configured combinations: {configured}"
+                )
+
+            log.debug("Auto-detected short_name '%s' from granule_id '%s'", short_name, item_id)
+
+        except Exception as e:
+            log.error(f"Failed to parse granule_id '{item_id}': {e}")
+            raise ValueError(f"Invalid granule ID format: {item_id}") from e
+
+        # Use the helper method with the determined short_name
+        return self._get_granule_by_short_name(item_id, short_name)
 
     def _parse_item_name(self, name: str) -> ProductInfo:
         parsed = self._parse_granule_id(name)
@@ -418,112 +584,4 @@ class VIIRSL1BSource(VIIRSSource):
             level=parsed.level,
             product_type=parsed.product_type,
             acquisition_time=acquisition_time,
-        )
-
-
-# --- MOD Products (M-bands, 750m resolution) ---
-
-
-class VNP02MODSource(VIIRSL1BSource):
-    """VIIRS Level 1B Moderate Resolution from Suomi-NPP (VNP02MOD).
-
-    M-bands with 750m resolution at nadir.
-    """
-
-    def __init__(self, downloader: Downloader, search_limit: int = 100):
-        super().__init__(
-            downloader=downloader,
-            short_name="VNP02MOD",
-            version="2",
-            default_composite="automatic",
-            default_resolution=750,
-            search_limit=search_limit,
-        )
-
-
-class VJ102MODSource(VIIRSL1BSource):
-    """VIIRS Level 1B Moderate Resolution from NOAA-20/JPSS-1 (VJ102MOD).
-
-    M-bands with 750m resolution at nadir.
-    """
-
-    def __init__(self, downloader: Downloader, search_limit: int = 100):
-        super().__init__(
-            downloader=downloader,
-            short_name="VJ102MOD",
-            version="2.1",
-            default_composite="automatic",
-            default_resolution=750,
-            search_limit=search_limit,
-        )
-
-
-class VJ202MODSource(VIIRSL1BSource):
-    """VIIRS Level 1B Moderate Resolution from NOAA-21/JPSS-2 (VJ202MOD).
-
-    M-bands with 750m resolution at nadir.
-    """
-
-    def __init__(self, downloader: Downloader, search_limit: int = 100):
-        super().__init__(
-            downloader=downloader,
-            short_name="VJ202MOD",
-            version="2.1",
-            default_composite="automatic",
-            default_resolution=750,
-            search_limit=search_limit,
-        )
-
-
-# --- IMG Products (I-bands, 375m resolution) ---
-
-
-class VNP02IMGSource(VIIRSL1BSource):
-    """VIIRS Level 1B Imagery Resolution from Suomi-NPP (VNP02IMG).
-
-    I-bands with 375m resolution at nadir.
-    """
-
-    def __init__(self, downloader: Downloader, search_limit: int = 100):
-        super().__init__(
-            downloader=downloader,
-            short_name="VNP02IMG",
-            version="2",
-            default_composite="automatic",
-            default_resolution=375,
-            search_limit=search_limit,
-        )
-
-
-class VJ102IMGSource(VIIRSL1BSource):
-    """VIIRS Level 1B Imagery Resolution from NOAA-20/JPSS-1 (VJ102IMG).
-
-    I-bands with 375m resolution at nadir.
-    """
-
-    def __init__(self, downloader: Downloader, search_limit: int = 100):
-        super().__init__(
-            downloader=downloader,
-            short_name="VJ102IMG",
-            version="2.1",
-            default_composite="automatic",
-            default_resolution=375,
-            search_limit=search_limit,
-        )
-
-
-class VJ202IMGSource(VIIRSL1BSource):
-    """VIIRS Level 1B Imagery Resolution from NOAA-21/JPSS-2 (VJ202IMG).
-
-    I-bands with 375m resolution at nadir.
-    """
-
-    def __init__(self, downloader: Downloader, search_limit: int = 100):
-        super().__init__(
-            downloader=downloader,
-            short_name="VJ202IMG",
-            version="2.1",
-            default_composite="automatic",
-            default_resolution=375,
-            search_limit=search_limit,
         )
