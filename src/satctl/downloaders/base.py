@@ -10,7 +10,7 @@ class Downloader(ABC):
         self.auth = authenticator
 
     @abstractmethod
-    def init(self) -> None: ...
+    def init(self, **kwargs) -> None: ...
 
     @abstractmethod
     def download(

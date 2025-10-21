@@ -1,4 +1,8 @@
+import logging
+import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, cast
 
@@ -9,8 +13,11 @@ from satpy.scene import Scene
 from shapely import Polygon
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, Granule, SearchParams
+from satctl.model import ConversionParams, Granule, ProgressEventType, SearchParams
+from satctl.progress.events import emit_event
 from satctl.writers import Writer
+
+log = logging.getLogger(__name__)
 
 
 class DataSource(ABC):
@@ -39,7 +46,7 @@ class DataSource(ABC):
     def search(self, params: SearchParams) -> list[Granule]: ...
 
     @abstractmethod
-    def get_by_id(self, item_id: str) -> Granule: ...
+    def get_by_id(self, item_id: str, **kwargs) -> Granule: ...
 
     @abstractmethod
     def get_files(self, item: Granule) -> list[Path | str]: ...
@@ -55,12 +62,78 @@ class DataSource(ABC):
     ) -> bool: ...
 
     @abstractmethod
+    def save_item(
+        self,
+        item: Granule,
+        destination: Path,
+        writer: Writer,
+        params: ConversionParams,
+        force: bool = False,
+    ) -> dict[str, list]: ...
+
+    def get_downloader_init_kwargs(self) -> dict:
+        """Hook method for subclasses to provide downloader initialization arguments.
+
+        Override this method in subclasses to pass custom arguments to downloader.init().
+
+        Returns:
+            dict: Keyword arguments to pass to downloader.init()
+        """
+        return {}
+
     def download(
         self,
         items: Granule | list[Granule],
         destination: Path,
         num_workers: int | None = None,
-    ) -> tuple[list, list]: ...
+    ) -> tuple[list, list]:
+        # check output folder exists, make sure items is iterable
+        destination.mkdir(parents=True, exist_ok=True)
+        if not isinstance(items, Iterable):
+            items = [items]
+        items = cast(list, items)
+
+        success = []
+        failure = []
+        num_workers = num_workers or 1
+        batch_id = str(uuid.uuid4())
+        emit_event(
+            ProgressEventType.BATCH_STARTED,
+            task_id=batch_id,
+            total_items=len(items),
+            description=self.collections[0],
+        )
+        self.downloader.init(**self.get_downloader_init_kwargs())
+        executor = None
+        try:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
+                for future in as_completed(future2item):
+                    item = future2item[future]
+                    result = future.result()
+                    if result:
+                        success.append(item)
+                    else:
+                        failure.append(item)
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            return success, failure
+        except KeyboardInterrupt:
+            log.info("Interrupted, cleaning up...")
+            if executor:
+                executor.shutdown(wait=False, cancel_futures=True)
+        finally:
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            return success, failure
 
     def load_scene(
         self,
@@ -204,7 +277,6 @@ class DataSource(ABC):
         )
         return cast(AreaDefinition, area_def)
 
-    @abstractmethod
     def save(
         self,
         items: Granule | list[Granule],
@@ -213,4 +285,62 @@ class DataSource(ABC):
         writer: Writer,
         num_workers: int | None = None,
         force: bool = False,
-    ) -> tuple[list, list]: ...
+    ) -> tuple[list, list]:
+        if not isinstance(items, Iterable):
+            items = [items]
+        items = cast(list, items)
+
+        success = []
+        failure = []
+        num_workers = num_workers or 1
+        batch_id = str(uuid.uuid4())
+
+        emit_event(
+            ProgressEventType.BATCH_STARTED,
+            task_id=batch_id,
+            total_items=len(items),
+            description=self.source_name,
+        )
+
+        executor = None
+        try:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future2item = {
+                    executor.submit(
+                        self.save_item,
+                        item,
+                        destination,
+                        writer,
+                        params,
+                        force,
+                    ): item
+                    for item in items
+                }
+                for future in as_completed(future2item):
+                    item = future2item[future]
+                    if future.result():
+                        success.append(item)
+                    else:
+                        failure.append(item)
+
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+        except KeyboardInterrupt:
+            log.info("Interrupted, cleaning up...")
+            if executor:
+                executor.shutdown(wait=False, cancel_futures=True)
+        finally:
+            emit_event(
+                ProgressEventType.BATCH_COMPLETED,
+                task_id=batch_id,
+                success_count=len(success),
+                failure_count=len(failure),
+            )
+            if executor:
+                executor.shutdown()
+
+        return success, failure

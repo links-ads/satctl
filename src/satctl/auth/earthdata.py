@@ -42,11 +42,13 @@ class EarthDataAuthenticator(Authenticator):
         if strategy == "environment":
             self.username = username or os.getenv(self.ENV_USER_NAME)
             self.password = password or os.getenv(self.ENV_PASS_NAME)
+
             if not self.username or not self.password:
                 raise ValueError(
                     f"{self.ENV_USER_NAME} and {self.ENV_PASS_NAME} environment variables must be set "
                     "when using 'environment' strategy"
                 )
+
             os.environ[self.ENV_USER_NAME] = self.username
             os.environ[self.ENV_PASS_NAME] = self.password
 
@@ -66,7 +68,6 @@ class EarthDataAuthenticator(Authenticator):
         """
         Note: earthaccess handles authentication internally,
         so we don't need to provide explicit headers.
-        TODO: evaluate whether some other headers might be needed.
         """
         self.ensure_authenticated()
         return {}
