@@ -7,11 +7,14 @@ from satctl.registry import Registry
 from satctl.sources.base import DataSource
 from satctl.sources.modis import MODISL1BSource
 from satctl.sources.sentinel3 import OLCISource, SLSTRSource
+from satctl.sources.sentinel2 import Sentinel2L2ASource, Sentinel2L1CSource
 from satctl.sources.viirs import VIIRSL1BSource
 
 registry = Registry[DataSource](name="source")
 registry.register("slstr", SLSTRSource)
 registry.register("olci", OLCISource)
+registry.register("s2l2a", Sentinel2L2ASource)
+registry.register("s2l1c", Sentinel2L1CSource)
 registry.register("viirs-l1b", VIIRSL1BSource)
 registry.register("modis-l1b", MODISL1BSource)
 
@@ -60,5 +63,7 @@ __all__ = [
     "SLSTRSource",
     "VIIRSL1BSource",
     "MODISL1BSource",
+    "Sentinel2L2ASource",
+    "Sentinel2L1CSource",
     "create_source",
 ]

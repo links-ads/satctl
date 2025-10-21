@@ -20,18 +20,41 @@ auth:
     username: $EARTHDATA_USERNAME
     password: $EARTHDATA_PASSWORD
 
+  s3:
+    token_url: "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    client_id: "cdse-public"
+    username: $ODATA_USERNAME
+    password: $ODATA_PASSWORD
+    s3_credentials_url: "https://eodata.dataspace.copernicus.eu/s3-credentials"
+    endpoint_url: "https://eodata.dataspace.copernicus.eu"
+    use_temp_credentials: false
+
 sources:
   slstr:
     authenticator: "odata"
     downloader: "http"
-    composite: "all_bands_1km"
+    default_composite: "all_bands_1km"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
 
   olci:
     authenticator: "odata"
     downloader: "http"
-    composite: "all_bands_300m"
+    default_composite: "all_bands_300m"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+  
+  s2l2a:
+    authenticator: "s3"
+    downloader: "s3"
+    default_composite: "true_color"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+    
+  s2l1c:
+    authenticator: "s3"
+    downloader: "s3"
+    default_composite: "true_color"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
 
