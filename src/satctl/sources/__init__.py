@@ -6,25 +6,12 @@ from satctl.downloaders import registry as dwl_registry
 from satctl.registry import Registry
 from satctl.sources.base import DataSource
 from satctl.sources.sentinel3 import OLCISource, SLSTRSource
-from satctl.sources.viirs import (
-    VIIRSL1BSource,
-    VJ102IMGSource,
-    VJ102MODSource,
-    VJ202IMGSource,
-    VJ202MODSource,
-    VNP02IMGSource,
-    VNP02MODSource,
-)
+from satctl.sources.viirs import VIIRSL1BSource
 
 registry = Registry[DataSource](name="source")
 registry.register("slstr", SLSTRSource)
 registry.register("olci", OLCISource)
-registry.register("viirs-l1b-vnp02mod", VNP02MODSource)
-registry.register("viirs-l1b-vnp02img", VNP02IMGSource)
-registry.register("viirs-l1b-vj102mod", VJ102MODSource)
-registry.register("viirs-l1b-vj102img", VJ102IMGSource)
-registry.register("viirs-l1b-vj202mod", VJ202MODSource)
-registry.register("viirs-l1b-vj202img", VJ202IMGSource)
+registry.register("viirs-l1b", VIIRSL1BSource)
 
 
 def create_source(
@@ -70,11 +57,5 @@ __all__ = [
     "OLCISource",
     "SLSTRSource",
     "VIIRSL1BSource",
-    "VNP02MODSource",
-    "VNP02IMGSource",
-    "VJ102MODSource",
-    "VJ102IMGSource",
-    "VJ202MODSource",
-    "VJ202IMGSource",
     "create_source",
 ]
