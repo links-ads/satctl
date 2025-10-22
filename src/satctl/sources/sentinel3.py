@@ -2,14 +2,12 @@ import logging
 import re
 import warnings
 from abc import abstractmethod
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel
 from pystac_client import Client
-from xarray import DataArray
 
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
@@ -138,56 +136,37 @@ class Sentinel3Source(DataSource):
         params: ConversionParams,
         force: bool = False,
     ) -> dict[str, list]:
-        if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-        if params.datasets is None and self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
+        """Save granule item to output files after processing.
 
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
-        log.debug("Attempting to save the following datasets: %s", datasets_dict)
-        # if not forced or already present,
-        # remove existing files from the process before loading scene
-        if not force:
-            for dataset_name, file_name in list(datasets_dict.items()):
-                if (destination / item.granule_id / f"{file_name}.{writer.extension}").exists():
-                    del datasets_dict[dataset_name]
+        Args:
+            item: Granule to process
+            destination: Base destination directory
+            writer: Writer instance for output
+            params: Conversion parameters
+            force: If True, overwrite existing files
 
-        files = self.get_files(item)
-        log.debug("Found %d files to process", len(files))
+        Returns:
+            Dictionary mapping granule_id to list of output paths
+        """
+        # Validate inputs using base class helper
+        self._validate_save_inputs(item, params)
 
+        # Parse datasets using base class helper
+        datasets_dict = self._prepare_datasets(writer, params)
+
+        # Filter existing files using base class helper
+        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
+
+        # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-        # if user does not provide an AoI, we use the entire granule extent
-        # similarly, if a user does not provide: source CRS, resolution, datasets,
-        # `define_area` will assume some sane defaults (4326, default_res or finest, default_composite)
-        if params.area_geometry is not None:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
+
+        # Define area using base class helper
+        area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
 
-        paths: dict[str, list] = defaultdict(list)
-        output_dir = destination / item.granule_id
-        output_dir.mkdir(exist_ok=True, parents=True)
-        for dataset_name, file_name in datasets_dict.items():
-            output_path = output_dir / f"{file_name}.{writer.extension}"
-            paths[item.granule_id].append(
-                writer.write(
-                    dataset=cast(DataArray, scene[dataset_name]),
-                    output_path=output_path,
-                )
-            )
-        return paths
+        # Write datasets using base class helper
+        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
 
 
 class SLSTRSource(Sentinel3Source):

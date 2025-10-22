@@ -2,34 +2,26 @@ import logging
 import re
 import warnings
 from abc import abstractmethod
-from collections import defaultdict
 from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, TypedDict
 
 import earthaccess
 import xarray as xr
 from pydantic import BaseModel
-from xarray import DataArray
 
 from satctl.auth.earthdata import EarthDataAuthenticator
 from satctl.downloaders import Downloader
 from satctl.downloaders.http import HTTPDownloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
+from satctl.sources.earthdata_utils import parse_umm_assets
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
 # Constants
-ASSET_KEY_MAPPING = {
-    "0": "http",
-    "1": "s3",
-    "2": "html",
-    "3": "doi",
-}
-
 SATELLITE_CONFIG = {
     "vnp": {"prefix": "VNP", "version": "2"},
     "jp1": {"prefix": "VJ1", "version": "2.1"},
@@ -178,28 +170,6 @@ class VIIRSSource(DataSource):
         return f"{parsed.instrument}{target_product}{parsed.product_type}.{parsed.date}.{parsed.time}.{parsed.version}.{timestamp}"
 
     # ============================================================================
-    # Asset parsing utilities
-    # ============================================================================
-
-    def _parse_assets_from_umm_result(self, umm_result: dict) -> dict[str, VIIRSAsset]:
-        """Parse assets from UMM search result into VIIRSAsset objects.
-
-        Args:
-            umm_result: UMM format result from earthaccess search
-
-        Returns:
-            Dictionary mapping asset keys (http, s3, html, doi) to VIIRSAsset objects
-        """
-        return {
-            ASSET_KEY_MAPPING.get(str(k), "unknown"): VIIRSAsset(
-                href=url["URL"],
-                type=url["Type"],
-                media_type=url["MimeType"],
-            )
-            for k, url in enumerate(umm_result["umm"]["RelatedUrls"])
-        }
-
-    # ============================================================================
     # Search operations
     # ============================================================================
 
@@ -252,8 +222,8 @@ class VIIRSSource(DataSource):
                     granule_id=radiance_id,
                     source=self.collections[0],
                     assets={
-                        "radiance": self._parse_assets_from_umm_result(radiance_result),
-                        "georeference": self._parse_assets_from_umm_result(georeference_result),
+                        "radiance": parse_umm_assets(radiance_result, VIIRSAsset),
+                        "georeference": parse_umm_assets(georeference_result, VIIRSAsset),
                     },
                     info=self._parse_item_name(radiance_id),
                 )
@@ -297,7 +267,7 @@ class VIIRSSource(DataSource):
         return Granule(
             granule_id=item_id,
             source=self.collections[0],
-            assets=self._parse_assets_from_umm_result(item),
+            assets=parse_umm_assets(item, VIIRSAsset),
             info=self._parse_item_name(item_id),
         )
 
@@ -383,30 +353,6 @@ class VIIRSSource(DataSource):
     # Processing helpers (used by save_item)
     # ============================================================================
 
-    def _filter_existing_datasets(
-        self,
-        datasets_dict: dict[str, str],
-        destination: Path,
-        granule_id: str,
-        writer: Writer,
-    ) -> dict[str, str]:
-        """Remove datasets that already exist on disk.
-
-        Args:
-            datasets_dict: Dictionary of dataset names to file names
-            destination: Base destination directory
-            granule_id: Granule identifier
-            writer: Writer instance with extension property
-
-        Returns:
-            Filtered dictionary with only non-existing datasets
-        """
-        filtered = datasets_dict.copy()
-        for dataset_name, file_name in list(datasets_dict.items()):
-            if (destination / granule_id / f"{file_name}.{writer.extension}").exists():
-                del filtered[dataset_name]
-        return filtered
-
     def _get_day_night_flag(self, files: list[Path | str]) -> str:
         """Extract day/night flag from the first file's metadata.
 
@@ -481,41 +427,6 @@ class VIIRSSource(DataSource):
                 )
         return filtered
 
-    def _write_scene_datasets(
-        self,
-        scene,
-        datasets_dict: dict[str, str],
-        destination: Path,
-        granule_id: str,
-        writer: Writer,
-    ) -> dict[str, list]:
-        """Write scene datasets to output files.
-
-        Args:
-            scene: Loaded and resampled scene
-            datasets_dict: Dictionary of dataset names to file names
-            destination: Base destination directory
-            granule_id: Granule identifier
-            writer: Writer instance
-
-        Returns:
-            Dictionary mapping granule_id to list of output paths
-        """
-        paths: dict[str, list] = defaultdict(list)
-        output_dir = destination / granule_id
-        output_dir.mkdir(exist_ok=True, parents=True)
-
-        for dataset_name, file_name in datasets_dict.items():
-            output_path = output_dir / f"{file_name}.{writer.extension}"
-            paths[granule_id].append(
-                writer.write(
-                    dataset=cast(DataArray, scene[dataset_name]),
-                    output_path=output_path,
-                )
-            )
-
-        return paths
-
     # ============================================================================
     # Processing operations
     # ============================================================================
@@ -540,18 +451,13 @@ class VIIRSSource(DataSource):
         Returns:
             Dictionary mapping granule_id to list of output paths
         """
-        # Validate inputs
-        if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
+        # Validate inputs using base class helper
+        self._validate_save_inputs(item, params)
 
-        if params.datasets is None and self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
+        # Parse datasets using base class helper
+        datasets_dict = self._prepare_datasets(writer, params)
 
-        # Parse and validate datasets
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
-        log.debug("Attempting to save the following datasets: %s", datasets_dict)
-
-        # Check for automatic dataset selection
+        # Check for automatic dataset selection (VIIRS-specific)
         auto_select = False
         automatic_keys = [key for key in datasets_dict.keys() if key.lower() == "automatic"]
 
@@ -564,21 +470,20 @@ class VIIRSSource(DataSource):
             auto_select = True
             log.debug("Automatic dataset selection enabled")
 
-        # Skip existing files unless forced
-        if not force:
-            datasets_dict = self._filter_existing_datasets(datasets_dict, destination, item.granule_id, writer)
+        # Filter existing files using base class helper
+        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
         # Early return if no datasets to process
         if not datasets_dict:
             log.debug("All datasets already exist for %s, skipping", item.granule_id)
             return {item.granule_id: []}
 
-        # Get files and extract day/night flag
+        # Get files and extract day/night flag (VIIRS-specific)
         files = self.get_files(item)
         log.debug("Found %d files to process", len(files))
         day_night_flag = self._get_day_night_flag(files)
 
-        # Handle dataset selection based on mode
+        # Handle dataset selection based on day/night mode (VIIRS-specific)
         if auto_select:
             datasets_dict = self._select_automatic_dataset(item.granule_id, day_night_flag, writer)
         else:
@@ -595,25 +500,11 @@ class VIIRSSource(DataSource):
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
 
-        # Define area based on user params or scene extent
-        if params.area_geometry is not None:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-
+        # Define area using base class helper
+        area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
 
-        # Write datasets to output
+        # Write datasets using base class helper
         return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
 
     def validate(self, item: Granule) -> None:
