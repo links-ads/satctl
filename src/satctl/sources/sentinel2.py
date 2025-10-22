@@ -96,12 +96,15 @@ class Sentinel2Source(DataSource):
         )
         items = [
             Granule(
-                granule_id=i.id,
+                granule_id=stac_item.id,
                 source=self.collections[0],
-                assets={k: S2Asset(href=v.href, media_type=v.media_type) for k, v in i.assets.items()},
-                info=self._parse_item_name(i.id),
+                assets={
+                    asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
+                    for asset_name, asset in stac_item.assets.items()
+                },
+                info=self._parse_item_name(stac_item.id),
             )
-            for i in search.items()
+            for stac_item in search.items()
         ]
         log.debug("Found %d items", len(items))
         return items

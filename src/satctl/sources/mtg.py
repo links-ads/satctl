@@ -1,25 +1,18 @@
 import logging
 import re
-import uuid
 import warnings
-from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
-from pystac_client import Client
 from satpy.scene import Scene
 from xarray import DataArray
 
 from satctl.downloaders import Downloader
-from satctl.model import (ConversionParams, Granule, ProductInfo,
-                          ProgressEventType, SearchParams)
-from satctl.progress.events import emit_event
+from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
 from satctl.writers import Writer
@@ -85,17 +78,17 @@ class MTGSource(DataSource):
             items.extend(
                 [
                     Granule(
-                        granule_id=str(i),
-                        source=str(i.collection),  
-                        assets={"product": MTGAsset(href=i.url)},
+                        granule_id=str(eumdac_result),
+                        source=str(eumdac_result.collection),
+                        assets={"product": MTGAsset(href=eumdac_result.url)},
                         info=ProductInfo(
-                            instrument=i.instrument,
+                            instrument=eumdac_result.instrument,
                             level="",
-                            product_type=i.product_type,
-                            acquisition_time=i.sensing_end,
+                            product_type=eumdac_result.product_type,
+                            acquisition_time=eumdac_result.sensing_end,
                         ),
                     )
-                    for i in results
+                    for eumdac_result in results
                 ]
             )
 
@@ -126,11 +119,10 @@ class MTGSource(DataSource):
             reader=self.reader,
             reader_kwargs=scene_options,
         )
-        # note: the data inside the FCI files is stored upside down. 
+        # note: the data inside the FCI files is stored upside down.
         # The upper_right_corner='NE' argument flips it automatically in upright position
-        scene.load(datasets, upper_right_corner='NE')
+        scene.load(datasets, upper_right_corner="NE")
         return scene
-
 
     def validate(self, item: Granule) -> None:
         """Validates a MTG Product item.
@@ -153,9 +145,7 @@ class MTGSource(DataSource):
         ):
             # extract to uniform with other sources
             local_path = extract_zip(
-                zip_path=local_file,
-                extract_to=destination / f"{item.granule_id}.MTG",
-                item_id=item.granule_id
+                zip_path=local_file, extract_to=destination / f"{item.granule_id}.MTG", item_id=item.granule_id
             )
             item.local_path = local_path
             log.debug("Saving granule metadata to: %s", local_path)

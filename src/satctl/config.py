@@ -64,8 +64,16 @@ class SatCtlSettings(BaseSettings):
 _instance: SatCtlSettings | None = None
 
 
-def get_settings(**kwargs: dict[str, Any]) -> SatCtlSettings:
-    if _instance is not None:
-        return _instance
-    kwargs = kwargs or {}
-    return SatCtlSettings(**kwargs)
+def get_settings(**kwargs: Any) -> SatCtlSettings:
+    """Get or create the global settings instance.
+
+    Args:
+        **kwargs: Optional keyword arguments passed to SatCtlSettings constructor
+
+    Returns:
+        Global SatCtlSettings instance
+    """
+    global _instance
+    if _instance is None:
+        _instance = SatCtlSettings(**kwargs)
+    return _instance

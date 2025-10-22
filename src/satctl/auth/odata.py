@@ -57,7 +57,7 @@ class ODataAuthenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.error(f"Authentication failed: {e}")
+            log.error("Authentication failed: %s", e)
             return False
 
     def refresh_access_token(self) -> bool:
@@ -84,7 +84,7 @@ class ODataAuthenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.error(f"Token refresh failed: {e}")
+            log.error("Token refresh failed: %s", e)
             # If refresh fails, try to re-authenticate
             return self.authenticate()
 

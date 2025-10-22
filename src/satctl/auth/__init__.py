@@ -1,3 +1,16 @@
+"""Authentication modules for different satellite data providers.
+
+This package provides authenticator implementations for various satellite data
+providers including:
+- ODataAuthenticator: OAuth2 authentication for Copernicus Data Space
+- EarthDataAuthenticator: NASA EarthData authentication
+- S3Authenticator: S3-compatible authentication (AWS, MinIO, etc.)
+- EUMETSATAuthenticator: EUMETSAT Data Store authentication
+
+All authenticators implement the Authenticator interface and are registered
+for use throughout satctl.
+"""
+
 from satctl.auth.base import Authenticator
 from satctl.auth.earthdata import EarthDataAuthenticator
 from satctl.auth.eumetsat import EUMETSATAuthenticator

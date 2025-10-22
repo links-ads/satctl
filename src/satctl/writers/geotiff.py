@@ -48,7 +48,7 @@ class GeoTIFFWriter(Writer):
                 west, south, east, north = area.area_extent
                 height, width = area.shape
                 transform = rasterio.transform.from_bounds(west, south, east, north, width, height)
-                log.debug(f"Created transform from AreaDefinition: {transform}")
+                log.debug("Created transform from AreaDefinition: %s", transform)
 
         except (KeyError, AttributeError):
             # Fall back to SwathDefinition (irregular grid with GCPs)
@@ -58,7 +58,7 @@ class GeoTIFFWriter(Writer):
                     gcps = area.lons.attrs.get("gcps")
                     crs = area.lons.attrs.get("crs")
                     if gcps and crs:
-                        log.debug(f"Using GCPs from SwathDefinition: {len(gcps)} points")
+                        log.debug("Using GCPs from SwathDefinition: %s points", len(gcps))
             except (KeyError, AttributeError):
                 log.warning("Couldn't extract geospatial information from DataArray")
 

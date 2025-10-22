@@ -289,7 +289,7 @@ class MODISSource(DataSource):
             item = results[0]
 
         except Exception as e:
-            log.error(f"Failed to fetch granule {item_id}: {e}")
+            log.error("Failed to fetch granule %s: %s", item_id, e)
             raise
 
         item_id = item["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".hdf", "")
@@ -354,7 +354,7 @@ class MODISSource(DataSource):
         )
 
         if not radiance_success:
-            log.warning(f"Failed to download radiance component: {item.granule_id}")
+            log.warning("Failed to download radiance component: %s", item.granule_id)
             return False
 
         # Download 03 product (georeference)
@@ -370,11 +370,11 @@ class MODISSource(DataSource):
         )
 
         if not georeference_success:
-            log.warning(f"Failed to download georeference component: {item.granule_id}")
+            log.warning("Failed to download georeference component: %s", item.granule_id)
             return False
 
         # Both downloads successful - save metadata
-        log.debug(f"Saving granule metadata to: {granule_dir}")
+        log.debug("Saving granule metadata to: %s", granule_dir)
         item.local_path = granule_dir
         item.to_file(granule_dir)
         return True
@@ -436,7 +436,7 @@ class MODISSource(DataSource):
             return "day"
 
         except Exception as e:
-            log.warning(f"Failed to extract day/night flag: {e}, defaulting to 'day'")
+            log.warning("Failed to extract day/night flag: %s, defaulting to 'day'", e)
             return "day"
 
     def _select_automatic_dataset(self, granule_id: str, day_night_flag: str, writer: Writer) -> dict[str, str]:
@@ -458,7 +458,7 @@ class MODISSource(DataSource):
 
         # Default to day if flag is not recognized
         if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            log.debug(f"DayNightFlag '{day_night_flag}' not recognized for {granule_id}, defaulting to 'day'")
+            log.debug("DayNightFlag '%s' not recognized for %s, defaulting to 'day'", day_night_flag, granule_id)
             day_night_flag = "day"
 
         # Map resolution and day/night flag to correct composite
@@ -471,7 +471,7 @@ class MODISSource(DataSource):
         else:
             raise ValueError(f"Unknown resolution '{resolution}' for automatic dataset selection")
 
-        log.debug(f"Automatically selected dataset: {selected_composite}")
+        log.debug("Automatically selected dataset: %s", selected_composite)
         return writer.parse_datasets(selected_composite)
 
     def _filter_datasets_by_day_night(
@@ -769,7 +769,7 @@ class MODISL1BSource(MODISSource):
             log.debug("Auto-detected short_name '%s' from granule_id '%s'", short_name, item_id)
 
         except Exception as e:
-            log.error(f"Failed to parse granule_id '{item_id}': {e}")
+            log.error("Failed to parse granule_id '%s': %s", item_id, e)
             raise ValueError(f"Invalid granule ID format: {item_id}") from e
 
         # Use the helper method with the determined short_name

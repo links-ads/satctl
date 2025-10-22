@@ -1,3 +1,12 @@
+"""Utility functions for satctl operations.
+
+This module provides helper functions for:
+- Progress-tracked I/O operations
+- Logging configuration
+- ZIP file extraction with progress reporting
+- Geometric area definition creation
+"""
+
 import logging
 import zipfile
 from functools import partial
