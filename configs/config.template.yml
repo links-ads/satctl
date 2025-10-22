@@ -17,8 +17,10 @@ auth:
     consumer_secret: $EUMETSAT_CONSUMER_SECRET
 
   earthdata:
+    strategy: "environment"
     username: $EARTHDATA_USERNAME
     password: $EARTHDATA_PASSWORD
+    mode: "requests_https"
 
   s3:
     token_url: "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
@@ -43,20 +45,34 @@ sources:
     default_composite: "all_bands_300m"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
-  
+
   s2l2a:
     authenticator: "s3"
     downloader: "s3"
     default_composite: "true_color"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
-    
+
   s2l1c:
     authenticator: "s3"
     downloader: "s3"
     default_composite: "true_color"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
+
+  viirs-l1b:
+    authenticator: "earthdata"
+    downloader: "http"
+    search_limit: 100
+    satellite: ["vnp", "jp1", "jp2"]
+    product_type: ["mod", "img"]
+
+  modis-l1b:
+    authenticator: "earthdata"
+    downloader: "http"
+    search_limit: 100
+    platform: ["mod"]
+    resolution: ["qkm", "hkm", "1km"]
 
 writer:
   geotiff:
