@@ -344,3 +344,135 @@ class DataSource(ABC):
                 executor.shutdown()
 
         return success, failure
+
+    def _validate_save_inputs(self, item: Granule, params: ConversionParams) -> None:
+        """Validate inputs for save_item operation.
+
+        Args:
+            item: Granule to process
+            params: Conversion parameters
+
+        Raises:
+            FileNotFoundError: If item.local_path is None or doesn't exist
+            ValueError: If both params.datasets and default_composite are None
+        """
+        if item.local_path is None or not item.local_path.exists():
+            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
+        if params.datasets is None and self.default_composite is None:
+            raise ValueError("Missing datasets or default composite for storage")
+
+    def _prepare_datasets(self, writer: Writer, params: ConversionParams) -> dict[str, str]:
+        """Parse and prepare datasets dictionary from params or defaults.
+
+        Args:
+            writer: Writer instance for parsing datasets
+            params: Conversion parameters
+
+        Returns:
+            Dictionary mapping dataset names to file names
+        """
+        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
+        log.debug("Attempting to save the following datasets: %s", datasets_dict)
+        return datasets_dict
+
+    def _filter_existing_files(
+        self,
+        datasets_dict: dict[str, str],
+        destination: Path,
+        granule_id: str,
+        writer: Writer,
+        force: bool,
+    ) -> dict[str, str]:
+        """Remove datasets that already exist unless force=True.
+
+        Args:
+            datasets_dict: Dictionary of dataset names to file names
+            destination: Base destination directory
+            granule_id: Granule identifier for subdirectory
+            writer: Writer instance for file extension
+            force: If True, don't filter existing files
+
+        Returns:
+            Filtered dictionary of datasets to process
+        """
+        if force:
+            return datasets_dict
+
+        filtered = {}
+        for dataset_name, file_name in datasets_dict.items():
+            output_path = destination / granule_id / f"{file_name}.{writer.extension}"
+            if not output_path.exists():
+                filtered[dataset_name] = file_name
+        return filtered
+
+    def _create_area_from_params(
+        self,
+        params: ConversionParams,
+        scene: Scene | None = None,
+    ) -> AreaDefinition:
+        """Create area definition from conversion params, using scene extent if no geometry.
+
+        Args:
+            params: Conversion parameters with CRS and optional geometry
+            scene: Optional scene for extracting extent when no geometry provided
+
+        Returns:
+            AreaDefinition for resampling
+
+        Raises:
+            ValueError: If scene is None when area_geometry is also None
+        """
+        if params.area_geometry is not None:
+            return self.define_area(
+                target_crs=params.target_crs_obj,
+                area=params.area_geometry,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+        else:
+            if scene is None:
+                raise ValueError("Scene required when area_geometry is None")
+            return self.define_area(
+                target_crs=params.target_crs_obj,
+                scene=scene,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+
+    def _write_scene_datasets(
+        self,
+        scene: Scene,
+        datasets_dict: dict[str, str],
+        destination: Path,
+        granule_id: str,
+        writer: Writer,
+    ) -> dict[str, list]:
+        """Write all datasets from scene to output files.
+
+        Args:
+            scene: Scene containing loaded datasets
+            datasets_dict: Dictionary mapping dataset names to file names
+            destination: Base destination directory
+            granule_id: Granule identifier for subdirectory
+            writer: Writer instance for output
+
+        Returns:
+            Dictionary mapping granule_id to list of output paths
+        """
+        from collections import defaultdict
+
+        from xarray import DataArray
+
+        paths: dict[str, list] = defaultdict(list)
+        output_dir = destination / granule_id
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        for dataset_name, file_name in datasets_dict.items():
+            output_path = output_dir / f"{file_name}.{writer.extension}"
+            paths[granule_id].append(
+                writer.write(
+                    dataset=cast(DataArray, scene[dataset_name]),
+                    output_path=output_path,
+                )
+            )
+        return paths
