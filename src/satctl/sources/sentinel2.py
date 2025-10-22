@@ -1,10 +1,8 @@
 import logging
 import re
-import uuid
 import warnings
 from abc import abstractmethod
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -15,8 +13,7 @@ from satpy.scene import Scene
 from xarray import DataArray
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, ProgressEventType, SearchParams
-from satctl.progress.events import emit_event
+from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.writers import Writer
 
