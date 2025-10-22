@@ -8,14 +8,15 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
 from pystac_client import Client
+from satpy.scene import Scene
 from xarray import DataArray
 
-from satctl.downloaders import Downloader, eumetsat
+from satctl.downloaders import Downloader
 from satctl.model import (ConversionParams, Granule, ProductInfo,
                           ProgressEventType, SearchParams)
 from satctl.progress.events import emit_event
@@ -105,7 +106,31 @@ class MTGSource(DataSource):
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
-        raise NotImplementedError()
+        if item.local_path is None:
+            raise ValueError("Local path is missing. Did you download this granule?")
+        return list(item.local_path.glob("*"))
+
+    def load_scene(
+        self,
+        item: Granule,
+        datasets: list[str] | None = None,
+        generate: bool = False,
+        **scene_options: dict[str, Any],
+    ) -> Scene:
+        if not datasets:
+            if self.default_composite is None:
+                raise ValueError("Please provide the source with a default composite, or provide custom composites")
+            datasets = [self.default_composite]
+        scene = Scene(
+            filenames=self.get_files(item),
+            reader=self.reader,
+            reader_kwargs=scene_options,
+        )
+        # note: the data inside the FCI files is stored upside down. 
+        # The upper_right_corner='NE' argument flips it automatically in upright position
+        scene.load(datasets, upper_right_corner='NE')
+        return scene
+
 
     def validate(self, item: Granule) -> None:
         """Validates a MTG Product item.
@@ -140,59 +165,6 @@ class MTGSource(DataSource):
             log.warning("Failed to download: %s", item.granule_id)
         return result
 
-    def download(
-        self,
-        items: Granule | list[Granule],
-        destination: Path,
-        num_workers: int | None = None,
-    ) -> tuple[list, list]:
-        # check output folder exists, make sure items is iterable
-        destination.mkdir(parents=True, exist_ok=True)
-        if not isinstance(items, Iterable):
-            items = [items]
-        items = cast(list, items)
-        success = []
-        failure = []
-        num_workers = num_workers or 1
-        batch_id = str(uuid.uuid4())
-        emit_event(
-            ProgressEventType.BATCH_STARTED,
-            task_id=batch_id,
-            total_items=len(items),
-            description=self.collections[0],
-        )
-        self.downloader.init()
-        executor = None
-        try:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
-                for future in as_completed(future2item):
-                    item = future2item[future]
-                    result = future.result()
-                    if result:
-                        success.append(item)
-                    else:
-                        failure.append(item)
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
-        except KeyboardInterrupt:
-            log.info("Interrupted, cleaning up...")
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
-        finally:
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
-
     def save_item(
         self,
         item: Granule,
@@ -201,15 +173,53 @@ class MTGSource(DataSource):
         params: ConversionParams,
         force: bool = False,
     ) -> dict[str, list]:
-        raise NotImplementedError()
+        if item.local_path is None or not item.local_path.exists():
+            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
+        if params.datasets is None or self.default_composite is None:
+            raise ValueError("Missing datasets or default composite for storage")
 
-    def save(
-        self,
-        items: Granule | list[Granule],
-        params: ConversionParams,
-        destination: Path,
-        writer: Writer,
-        num_workers: int | None = None,
-        force: bool = False,
-    ) -> tuple[list, list]:
-        raise NotImplementedError()
+        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
+        log.debug("Attempting to save the following datasets: %s", datasets_dict)
+        # if not forced or already present,
+        # remove existing files from the process before loading scene
+        if not force:
+            for dataset_name, file_name in list(datasets_dict.items()):
+                if (destination / item.granule_id / f"{file_name}.{writer.extension}").exists():
+                    del datasets_dict[dataset_name]
+
+        files = self.get_files(item)
+        log.debug("Found %d files to process", len(files))
+
+        log.debug("Loading and resampling scene")
+        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+        # if user does not provide an AoI, we use the entire granule extent
+        # similarly, if a user does not provide: source CRS, resolution, datasets,
+        # `define_area` will assume some sane defaults (4326, default_res or finest, default_composite)
+        if params.area_geometry is not None:
+            area_def = self.define_area(
+                target_crs=params.target_crs_obj,
+                area=params.area_geometry,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+        else:
+            area_def = self.define_area(
+                target_crs=params.target_crs_obj,
+                scene=scene,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+        scene = self.resample(scene, area_def=area_def)
+
+        paths: dict[str, list] = defaultdict(list)
+        output_dir = destination / item.granule_id
+        output_dir.mkdir(exist_ok=True, parents=True)
+        for dataset_name, file_name in datasets_dict.items():
+            output_path = output_dir / f"{file_name}.{writer.extension}"
+            paths[item.granule_id].append(
+                writer.write(
+                    dataset=cast(DataArray, scene[dataset_name]),
+                    output_path=output_path,
+                )
+            )
+        return paths
