@@ -333,7 +333,7 @@ class Sentinel2Source(DataSource):
     ) -> dict[str, list]:
         if item.local_path is None or not item.local_path.exists():
             raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-        if params.datasets is None or self.default_composite is None:
+        if params.datasets is None and self.default_composite is None:
             raise ValueError("Missing datasets or default composite for storage")
 
         datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)

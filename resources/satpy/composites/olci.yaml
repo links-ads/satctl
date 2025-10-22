@@ -1,0 +1,49 @@
+sensor_name: visir/olci
+
+composites:
+  all_bands:
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: Oa01
+      modifiers: [sunz_corrected]
+    - name: Oa02
+      modifiers: [sunz_corrected]
+    - name: Oa03
+      modifiers: [sunz_corrected]
+    - name: Oa04
+      modifiers: [sunz_corrected]
+    - name: Oa05
+      modifiers: [sunz_corrected]
+    - name: Oa06
+      modifiers: [sunz_corrected]
+    - name: Oa07
+      modifiers: [sunz_corrected]
+    - name: Oa08
+      modifiers: [sunz_corrected]
+    - name: Oa09
+      modifiers: [sunz_corrected]
+    - name: Oa10
+      modifiers: [sunz_corrected]
+    - name: Oa11
+      modifiers: [sunz_corrected]
+    - name: Oa12
+      modifiers: [sunz_corrected]
+    - name: Oa13
+      modifiers: [sunz_corrected]
+    - name: Oa14
+      modifiers: [sunz_corrected]
+    - name: Oa15
+      modifiers: [sunz_corrected]
+    - name: Oa16
+      modifiers: [sunz_corrected]
+    - name: Oa17
+      modifiers: [sunz_corrected]
+    - name: Oa18
+      modifiers: [sunz_corrected]
+    - name: Oa19
+      modifiers: [sunz_corrected]
+    - name: Oa20
+      modifiers: [sunz_corrected]
+    - name: Oa21
+      modifiers: [sunz_corrected]
+    standard_name: all_bands
