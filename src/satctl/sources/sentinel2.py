@@ -261,68 +261,6 @@ class Sentinel2Source(DataSource):
             log.warning("Failed to download all required assets for: %s", item.granule_id)
         return all_success
 
-    def download(
-        self,
-        items: Granule | list[Granule],
-        destination: Path,
-        num_workers: int | None = None,
-    ) -> tuple[list, list]:
-        """Download a list of Sentinel-2 MSI products.
-
-        Args:
-            items (Granule | list[Granule]): List of Sentinel-2 MSI products to download.
-            destination (Path): Path to the destination directory.
-            num_workers (int | None, optional): Number of workers to use for downloading. Defaults to None.
-
-        Returns:
-            tuple[list, list]: List of successfully downloaded items and list of failed items.
-        """
-        # check output folder exists, make sure items is iterable
-        destination.mkdir(parents=True, exist_ok=True)
-        if not isinstance(items, list):
-            items = [items]
-        success = []
-        failure = []
-        num_workers = num_workers or 1
-        batch_id = str(uuid.uuid4())
-        emit_event(
-            ProgressEventType.BATCH_STARTED,
-            task_id=batch_id,
-            total_items=len(items),
-            description=self.collections[0],
-        )
-        self.downloader.init()
-        executor = None
-        try:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
-                for future in as_completed(future2item):
-                    item = future2item[future]
-                    result = future.result()
-                    if result:
-                        success.append(item)
-                    else:
-                        failure.append(item)
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
-        except KeyboardInterrupt:
-            log.info("Interrupted, cleaning up...")
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
-        finally:
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
-
     def save_item(
         self,
         item: Granule,
@@ -381,69 +319,6 @@ class Sentinel2Source(DataSource):
                 )
             )
         return paths
-
-    def save(
-        self,
-        items: Granule | list[Granule],
-        params: ConversionParams,
-        destination: Path,
-        writer: Writer,
-        num_workers: int | None = None,
-        force: bool = False,
-    ) -> tuple[list, list]:
-        if not isinstance(items, list):
-            items = [items]
-
-        success = []
-        failure = []
-        num_workers = num_workers or 1
-        batch_id = str(uuid.uuid4())
-        emit_event(
-            ProgressEventType.BATCH_STARTED,
-            task_id=batch_id,
-            total_items=len(items),
-            description=self.source_name,
-        )
-        executor = None
-        try:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {
-                    executor.submit(
-                        self.save_item,
-                        item,
-                        destination,
-                        writer,
-                        params,
-                        force,
-                    ): item
-                    for item in items
-                }
-                for future in as_completed(future2item):
-                    item = future2item[future]
-                    if future.result():
-                        success.append(item)
-                    else:
-                        failure.append(item)
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-        except KeyboardInterrupt:
-            log.info("Interruped, cleaning up...")
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
-        finally:
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            if executor:
-                executor.shutdown()
-        return success, failure
 
 
 class Sentinel2L2ASource(Sentinel2Source):
