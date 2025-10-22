@@ -1,11 +1,8 @@
 import logging
 import re
-import uuid
 import warnings
 from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -15,8 +12,7 @@ from pystac_client import Client
 from xarray import DataArray
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, ProgressEventType, SearchParams
-from satctl.progress.events import emit_event
+from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
 from satctl.writers import Writer
@@ -192,70 +188,6 @@ class Sentinel3Source(DataSource):
                 )
             )
         return paths
-
-    def save(
-        self,
-        items: Granule | list[Granule],
-        params: ConversionParams,
-        destination: Path,
-        writer: Writer,
-        num_workers: int | None = None,
-        force: bool = False,
-    ) -> tuple[list, list]:
-        if not isinstance(items, Iterable):
-            items = [items]
-        items = cast(list, items)
-
-        success = []
-        failure = []
-        num_workers = num_workers or 1
-        batch_id = str(uuid.uuid4())
-        emit_event(
-            ProgressEventType.BATCH_STARTED,
-            task_id=batch_id,
-            total_items=len(items),
-            description=self.source_name,
-        )
-        executor = None
-        try:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {
-                    executor.submit(
-                        self.save_item,
-                        item,
-                        destination,
-                        writer,
-                        params,
-                        force,
-                    ): item
-                    for item in items
-                }
-                for future in as_completed(future2item):
-                    item = future2item[future]
-                    if future.result():
-                        success.append(item)
-                    else:
-                        failure.append(item)
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-        except KeyboardInterrupt:
-            log.info("Interruped, cleaning up...")
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
-        finally:
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            if executor:
-                executor.shutdown()
-        return success, failure
 
 
 class SLSTRSource(Sentinel3Source):
