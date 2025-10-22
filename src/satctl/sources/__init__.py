@@ -60,4 +60,4 @@ def create_source(
     )
 
 
-__all__ = ["OLCISource", "SLSTRSource", "Sentinel2L2ASource", "Sentinel2L1CSource", "MTGSource" "create_source"]
+__all__ = ["OLCISource", "SLSTRSource", "Sentinel2L2ASource", "Sentinel2L1CSource", "MTGSource", "create_source"]
