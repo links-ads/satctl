@@ -35,14 +35,14 @@ sources:
   slstr:
     authenticator: "odata"
     downloader: "http"
-    default_composite: "all_bands_1km"
+    default_composite: "all_bands_m"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
 
   olci:
     authenticator: "odata"
     downloader: "http"
-    default_composite: "all_bands_300m"
+    default_composite: "all_bands"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
 
