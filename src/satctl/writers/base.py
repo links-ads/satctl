@@ -33,11 +33,13 @@ class Writer(ABC):
         output_path: Path,
         **kwargs,
     ) -> None:
-        """Write scene data to file.
+        """Write dataset to file in the specific format.
 
         Args:
-            scene: Resampled satpy Scene
-            output_path: Output file path
-            composite: Name of composite to write
-            **kwargs: Additional writer-specific options
+            dataset: Xarray DataArray with satellite data and metadata
+            output_path: Path where the output file will be written
+            **kwargs: Writer-specific options (compression, dtype, etc.)
+
+        Raises:
+            FileNotFoundError: If output_path parent directory doesn't exist
         """

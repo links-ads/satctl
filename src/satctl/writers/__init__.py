@@ -1,3 +1,12 @@
+"""Writer implementations for different output formats.
+
+This package provides writers for exporting processed satellite data:
+- GeoTIFFWriter: Exports data to GeoTIFF format with configurable compression
+
+All writers implement the Writer interface and handle dataset metadata,
+coordinate systems, and format-specific options.
+"""
+
 from satctl.registry import Registry
 from satctl.writers.base import Writer
 from satctl.writers.geotiff import GeoTIFFWriter

@@ -1,7 +1,6 @@
 import logging
-from typing import Any, Optional
+from typing import Optional
 
-import eumdac
 from eumdac.token import AccessToken
 
 from satctl.auth.base import Authenticator
@@ -42,7 +41,7 @@ class EUMETSATAuthenticator(Authenticator):
             return self._authenticated
 
         except Exception as e:
-            log.error(f"Authentication failed: {e}")
+            log.error("Authentication failed: %s", e)
             self._authenticated = False
             self.access_token = None
             return False

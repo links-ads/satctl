@@ -57,11 +57,11 @@ class HTTPDownloader(Downloader):
             try:
                 # Ensure we have authentication
                 if not self.auth.ensure_authenticated():
-                    log.error(f"Authentication failed on attempt {attempt + 1}")
+                    log.error("Authentication failed on attempt %s", attempt + 1)
                     continue
 
                 headers = self.auth.auth_headers
-                log.debug(f"Downloading {uri} (attempt {attempt + 1}/{self.max_retries})")
+                log.debug("Downloading %s (attempt %s/%s)", uri, attempt + 1, self.max_retries)
                 response = self.session.get(uri, headers=headers, stream=True, timeout=self.timeout)
 
                 if response.status_code == 401:
@@ -86,18 +86,18 @@ class HTTPDownloader(Downloader):
                             downloaded_bytes += len(chunk)
                             emit_event(ProgressEventType.TASK_PROGRESS, task_id=task_id, advance=len(chunk))
 
-                log.debug(f"Successfully downloaded {uri} ({downloaded_bytes} bytes)")
+                log.debug("Successfully downloaded %s (%s bytes)", uri, downloaded_bytes)
                 emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
                 return True
 
             except requests.exceptions.Timeout:
-                log.debug(f"Timeout downloading {uri} on attempt {attempt + 1}")
+                log.debug("Timeout downloading %s on attempt %s", uri, attempt + 1)
                 error = "timed out"
             except requests.exceptions.RequestException as e:
-                log.debug(f"Request error downloading {uri} on attempt {attempt + 1}: {e}")
+                log.debug("Request error downloading %s on attempt %s: %s", uri, attempt + 1, e)
                 error = "exception request"
             except Exception as e:
-                log.warning(f"Unexpected error downloading {uri} on attempt {attempt + 1}: {type(e)} - {e}")
+                log.warning("Unexpected error downloading %s on attempt %s: %s - %s", uri, attempt + 1, type(e), e)
                 error = str(e)
         emit_event(
             ProgressEventType.TASK_COMPLETED,

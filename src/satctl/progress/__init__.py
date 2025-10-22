@@ -1,3 +1,14 @@
+"""Progress reporting implementations for satellite data operations.
+
+This package provides progress reporters for tracking download and processing:
+- EmptyProgressReporter: No-op reporter for silent operation
+- SimpleProgressReporter: Basic text-based progress output
+- RichProgressReporter: Enhanced terminal UI with progress bars
+
+All reporters implement the ProgressReporter interface and can be configured
+via the registry system.
+"""
+
 from typing import Any
 
 from satctl.progress.base import EmptyProgressReporter, LoggingConfig, ProgressReporter

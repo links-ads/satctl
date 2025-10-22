@@ -1,3 +1,10 @@
+"""Custom satpy compositors for multi-band products.
+
+This module extends satpy's compositor system to handle arbitrary numbers
+of bands. The standard GenericCompositor is limited to 4 bands (RGBA),
+but satellite data often requires stacking more bands for analysis.
+"""
+
 from typing import Optional, Sequence
 
 import xarray as xr
@@ -70,12 +77,12 @@ class MultiBandCompositor(CompositeBase):
             list[str]:list of band names.
         """
         band_names = []
-        for i, dataset in enumerate(datasets):
+        for band_index, dataset in enumerate(datasets):
             # Try to get a meaningful name from the dataset
             name = dataset.attrs.get("name")
             if name is None:
                 # Fallback to generic band naming
-                name = f"band_{i + 1}"
+                name = f"band_{band_index + 1}"
             band_names.append(str(name))
         return band_names
 

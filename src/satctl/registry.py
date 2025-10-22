@@ -1,3 +1,19 @@
+"""Generic registry pattern for managing pluggable implementations.
+
+This module provides a type-safe registry system that allows registering,
+retrieving, and instantiating implementations of a given interface. It's
+used throughout satctl for data sources, authenticators, downloaders,
+and writers.
+
+Example:
+    >>> from satctl.registry import Registry
+    >>> from satctl.sources import DataSource
+    >>>
+    >>> source_registry = Registry[DataSource]("source")
+    >>> source_registry.register("sentinel2", Sentinel2L2ASource)
+    >>> source = source_registry.create("sentinel2", downloader=my_downloader)
+"""
+
 from typing import Generic, TypeVar
 
 T = TypeVar("T")

@@ -289,7 +289,7 @@ class VIIRSSource(DataSource):
             item = results[0]
 
         except Exception as e:
-            log.error(f"Failed to fetch granule {item_id}: {e}")
+            log.error("Failed to fetch granule %s: %s", item_id, e)
             raise
 
         item_id = item["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
@@ -354,7 +354,7 @@ class VIIRSSource(DataSource):
         )
 
         if not radiance_success:
-            log.warning(f"Failed to download radiance component: {item.granule_id}")
+            log.warning("Failed to download radiance component: %s", item.granule_id)
             return False
 
         # Download 03 product (georeference)
@@ -370,11 +370,11 @@ class VIIRSSource(DataSource):
         )
 
         if not georeference_success:
-            log.warning(f"Failed to download georeference component: {item.granule_id}")
+            log.warning("Failed to download georeference component: %s", item.granule_id)
             return False
 
         # Both downloads successful - save metadata
-        log.debug(f"Saving granule metadata to: {granule_dir}")
+        log.debug("Saving granule metadata to: %s", granule_dir)
         item.local_path = granule_dir
         item.to_file(granule_dir)
         return True
@@ -438,7 +438,7 @@ class VIIRSSource(DataSource):
 
         # Default to day if flag is not recognized
         if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            log.debug(f"DayNightFlag '{day_night_flag}' not recognized for {granule_id}, defaulting to 'day'")
+            log.debug("DayNightFlag '%s' not recognized for %s, defaulting to 'day'", day_night_flag, granule_id)
             day_night_flag = "day"
 
         # Map product type and day/night flag to correct composite
@@ -449,7 +449,7 @@ class VIIRSSource(DataSource):
         else:
             raise ValueError(f"Unknown product type '{product_type}' for automatic dataset selection")
 
-        log.debug(f"Automatically selected dataset: {selected_composite}")
+        log.debug("Automatically selected dataset: %s", selected_composite)
         return writer.parse_datasets(selected_composite)
 
     def _filter_datasets_by_day_night(
@@ -747,7 +747,7 @@ class VIIRSL1BSource(VIIRSSource):
             log.debug("Auto-detected short_name '%s' from granule_id '%s'", short_name, item_id)
 
         except Exception as e:
-            log.error(f"Failed to parse granule_id '{item_id}': {e}")
+            log.error("Failed to parse granule_id '%s': %s", item_id, e)
             raise ValueError(f"Invalid granule ID format: {item_id}") from e
 
         # Use the helper method with the determined short_name

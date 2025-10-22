@@ -102,7 +102,7 @@ class S3Authenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.error(f"OAuth2 authentication failed: {e}")
+            log.error("OAuth2 authentication failed: %s", e)
             return False
 
     def _get_s3_credentials(self) -> bool:
@@ -113,7 +113,7 @@ class S3Authenticator(Authenticator):
 
         try:
             headers = {"Authorization": f"Bearer {self.access_token}"}
-            log.debug(f"Requesting S3 credentials from: {self.s3_credentials_url}")
+            log.debug("Requesting S3 credentials from: %s", self.s3_credentials_url)
             response = requests.get(self.s3_credentials_url, headers=headers, timeout=30)
             response.raise_for_status()
 
@@ -128,7 +128,7 @@ class S3Authenticator(Authenticator):
                 try:
                     self.s3_expiration = datetime.fromisoformat(expiration_str.replace("Z", "+00:00"))
                 except Exception as e:
-                    log.warning(f"Could not parse S3 expiration time: {e}")
+                    log.warning("Could not parse S3 expiration time: %s", e)
                     self.s3_expiration = None
 
             if not self.s3_access_key or not self.s3_secret_key:
@@ -139,7 +139,7 @@ class S3Authenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.warning(f"Failed to get S3 credentials from {self.s3_credentials_url}: {e}")
+            log.warning("Failed to get S3 credentials from %s: %s", self.s3_credentials_url, e)
             log.warning("S3 access may require environment variables or ~/.aws/credentials")
             return False
 
@@ -175,7 +175,7 @@ class S3Authenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.error(f"Token refresh failed: {e}")
+            log.error("Token refresh failed: %s", e)
             return self._get_oauth_token()
 
     def _are_s3_credentials_valid(self) -> bool:

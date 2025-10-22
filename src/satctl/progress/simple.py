@@ -32,14 +32,14 @@ class SimpleProgressReporter(ProgressReporter):
     def on_batch_started(self, event: ProgressEvent) -> None:
         total_items = event.data.get("total_items", "NA")
         self.total_items = total_items
-        self.log.info(f"Tracking progress for {total_items} items")
+        self.log.info("Tracking progress for %s items", total_items)
 
     def on_batch_completed(self, event: ProgressEvent):
         success_count = event.data.get("success_count")
         failure_count = event.data.get("failure_count")
         success = str(success_count) or "NA"
         failure = str(failure_count) or "NA"
-        self.log.info(f"Batch complete: {success} succeeded, {failure} failed")
+        self.log.info("Batch complete: %s succeeded, %s failed", success, failure)
 
     def on_task_created(self, event: ProgressEvent):
         self.log.info("Started %s - %s", event.task_id, event.data.get("description", ""))

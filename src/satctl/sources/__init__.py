@@ -1,3 +1,17 @@
+"""Data source implementations for different satellite missions.
+
+This package provides source implementations for various satellite missions:
+- Sentinel2L1CSource, Sentinel2L2ASource: Copernicus Sentinel-2 MSI data
+- OLCISource, SLSTRSource: Copernicus Sentinel-3 OLCI and SLSTR data
+- VIIRSL1BSource: NASA/NOAA VIIRS Level 1B data
+- MODISL1BSource: NASA MODIS Level 1B data
+- MTGSource: EUMETSAT Meteosat Third Generation data
+
+All sources implement the DataSource interface and provide unified search,
+download, and processing capabilities. Sources are configured via the registry
+system and can be created using the create_source() factory function.
+"""
+
 from typing import Any
 
 from satctl.auth import registry as auth_registry
