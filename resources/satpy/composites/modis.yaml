@@ -1,0 +1,174 @@
+sensor_name: visir/modis
+
+modifiers:
+  sunz_corrected:
+    modifier: !!python/name:satpy.modifiers.SunZenithCorrector
+    prerequisites:
+    - name: solar_zenith_angle
+
+# Custom composites for satctl MODIS processing
+# Organized by resolution and day/night conditions following VIIRS pattern.
+#
+# MODIS Band Distribution:
+# - Reflective Solar Bands (RSB): Bands 1-19 (require sunz_corrected for daytime)
+# - Thermal Emissive Bands (TEB): Bands 20-36 (usable day and night)
+#
+# Product-specific bands:
+# - MOD02QKM (250m): Bands 1-2 (both RSB)
+# - MOD02HKM (500m): Bands 1-7 (all RSB)
+# - MOD021KM (1km): Bands 1-36 (1-19 RSB, 20-36 TEB)
+#
+# Note: QKM and HKM products contain only reflective bands, so night composites
+# for these resolutions will be empty placeholders to prevent errors.
+
+composites:
+  # ============================================================================
+  # 250m Resolution Composites (MOD02QKM - Bands 1-2)
+  # ============================================================================
+
+  all_bands_250m_day:
+    # Daytime 250m composite: Bands 1-2 (both reflective, require sunz correction)
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: '1'
+      modifiers: [sunz_corrected]
+    - name: '2'
+      modifiers: [sunz_corrected]
+    standard_name: all_bands_250m_day
+
+  all_bands_250m_night:
+    # Night composite for 250m is empty - QKM product has no thermal bands.
+    # This placeholder prevents errors during automatic dataset selection.
+    # Processing will log warning and skip if DayNightFlag is "night" for QKM granules.
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites: []
+    standard_name: all_bands_250m_night
+
+  # ============================================================================
+  # 500m Resolution Composites (MOD02HKM - Bands 1-7)
+  # ============================================================================
+
+  all_bands_500m_day:
+    # Daytime 500m composite: Bands 1-7 (all reflective, require sunz correction)
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: '1'
+      modifiers: [sunz_corrected]
+    - name: '2'
+      modifiers: [sunz_corrected]
+    - name: '3'
+      modifiers: [sunz_corrected]
+    - name: '4'
+      modifiers: [sunz_corrected]
+    - name: '5'
+      modifiers: [sunz_corrected]
+    - name: '6'
+      modifiers: [sunz_corrected]
+    - name: '7'
+      modifiers: [sunz_corrected]
+    standard_name: all_bands_500m_day
+
+  all_bands_500m_night:
+    # Night composite for 500m is empty - HKM product has no thermal bands.
+    # This placeholder prevents errors during automatic dataset selection.
+    # Processing will log warning and skip if DayNightFlag is "night" for HKM granules.
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites: []
+    standard_name: all_bands_500m_night
+
+  # ============================================================================
+  # 1km Resolution Composites (MOD021KM - Bands 1-36)
+  # ============================================================================
+
+  all_bands_1km_day:
+    # Daytime 1km composite: All 36 bands
+    # - Bands 1-19: Reflective (with sunz_corrected)
+    # - Bands 20-36: Thermal (no correction needed)
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    # Reflective Solar Bands (1-19) - require sunz correction
+    - name: '1'
+      modifiers: [sunz_corrected]
+    - name: '2'
+      modifiers: [sunz_corrected]
+    - name: '3'
+      modifiers: [sunz_corrected]
+    - name: '4'
+      modifiers: [sunz_corrected]
+    - name: '5'
+      modifiers: [sunz_corrected]
+    - name: '6'
+      modifiers: [sunz_corrected]
+    - name: '7'
+      modifiers: [sunz_corrected]
+    - name: '8'
+      modifiers: [sunz_corrected]
+    - name: '9'
+      modifiers: [sunz_corrected]
+    - name: '10'
+      modifiers: [sunz_corrected]
+    - name: '11'
+      modifiers: [sunz_corrected]
+    - name: '12'
+      modifiers: [sunz_corrected]
+    - name: '13hi'
+      modifiers: [sunz_corrected]
+    - name: '13lo'
+      modifiers: [sunz_corrected]
+    - name: '14hi'
+      modifiers: [sunz_corrected]
+    - name: '14lo'
+      modifiers: [sunz_corrected]
+    - name: '15'
+      modifiers: [sunz_corrected]
+    - name: '16'
+      modifiers: [sunz_corrected]
+    - name: '17'
+      modifiers: [sunz_corrected]
+    - name: '18'
+      modifiers: [sunz_corrected]
+    - name: '19'
+      modifiers: [sunz_corrected]
+    # Thermal Emissive Bands (20-36) - no sunz correction
+    - name: '20'
+    - name: '21'
+    - name: '22'
+    - name: '23'
+    - name: '24'
+    - name: '25'
+    - name: '26'
+    - name: '27'
+    - name: '28'
+    - name: '29'
+    - name: '30'
+    - name: '31'
+    - name: '32'
+    - name: '33'
+    - name: '34'
+    - name: '35'
+    - name: '36'
+    standard_name: all_bands_1km_day
+
+  all_bands_1km_night:
+    # Nighttime 1km composite: Only thermal emissive bands (20-36)
+    # Reflective bands are not usable at night
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+    - name: '20'
+    - name: '21'
+    - name: '22'
+    - name: '23'
+    - name: '24'
+    - name: '25'
+    - name: '26'
+    - name: '27'
+    - name: '28'
+    - name: '29'
+    - name: '30'
+    - name: '31'
+    - name: '32'
+    - name: '33'
+    - name: '34'
+    - name: '35'
+    - name: '36'
+    standard_name: all_bands_1km_night
