@@ -34,12 +34,11 @@ class Registry(Generic[T]):
 
     def create(self, name: str, **kwargs) -> T:
         if name not in self._items:
+            available = ", ".join(self._items.keys())
             raise ValueError(
-                (
-                    f"{self.registry_name.capitalize()} '{name}' not found. "
-                    f"Specify one of the following: ({list(self._items.keys())}), "
-                    f"or register your own {self.registry_name}."
-                )
+                f"Resource not found: {self.registry_name} '{name}'. "
+                f"Available options: {available}. "
+                f"To register a custom {self.registry_name}, use {self.registry_name}_registry.register(name, class)."
             )
         source_class = self._items[name]
         return source_class(**kwargs)

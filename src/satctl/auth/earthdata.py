@@ -45,8 +45,8 @@ class EarthDataAuthenticator(Authenticator):
 
             if not self.username or not self.password:
                 raise ValueError(
-                    f"{self.ENV_USER_NAME} and {self.ENV_PASS_NAME} environment variables must be set "
-                    "when using 'environment' strategy"
+                    f"Invalid configuration: {self.ENV_USER_NAME} and {self.ENV_PASS_NAME} "
+                    "environment variables are required when using 'environment' strategy"
                 )
 
             os.environ[self.ENV_USER_NAME] = self.username
@@ -77,5 +77,5 @@ class EarthDataAuthenticator(Authenticator):
         self.ensure_authenticated()
         session_name = f"get_{self.mode}_session"
         if not hasattr(earthaccess, session_name):
-            raise ValueError(f"earthaccess does not support mode: {self.mode}")
+            raise ValueError(f"Invalid mode: '{self.mode}' (earthaccess does not support this mode)")
         return getattr(earthaccess, session_name)()

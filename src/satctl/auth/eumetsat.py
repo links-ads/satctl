@@ -20,7 +20,7 @@ class EUMETSATAuthenticator(Authenticator):
         self._authenticated = False
         self.access_token: Optional[AccessToken] = None
         if not self.consumer_key or not self.consumer_secret:
-            raise ValueError("Consumer key and secret must be set")
+            raise ValueError("Invalid configuration: consumer_key and consumer_secret are required")
 
         # Attempt initial authentication immediately
         self.ensure_authenticated()
@@ -52,7 +52,7 @@ class EUMETSATAuthenticator(Authenticator):
         Get standard authorization headers (Bearer token) for generic HTTP use.
         """
         if not self.ensure_authenticated():
-            raise RuntimeError("Failed to authenticate with EUMETSAT")
+            raise RuntimeError("Authentication failed for EUMETSAT: could not obtain access token")
 
         # Extract the token string from the AccessToken object
         token_string = str(self.access_token)
@@ -65,7 +65,7 @@ class EUMETSATAuthenticator(Authenticator):
         which is required for creating the eumdac.DataStore client.
         """
         if not self.ensure_authenticated(refresh=True):
-            raise RuntimeError("Authentication failed: AccessToken is not available")
+            raise RuntimeError("Authentication failed for EUMETSAT: AccessToken is not available")
         return self.access_token
 
     def ensure_authenticated(self, refresh: bool = False) -> bool:

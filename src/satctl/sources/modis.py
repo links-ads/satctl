@@ -35,6 +35,8 @@ RESOLUTION_CONFIG = {
 
 DAY_NIGHT_CONDITIONS = ("day", "night")
 
+DEFAULT_SEARCH_LIMIT = 100
+
 
 class ProductCombination(TypedDict):
     """Configuration for a specific platform/resolution combination."""
@@ -77,7 +79,7 @@ class MODISSource(DataSource):
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         super().__init__(
             collection_name,
@@ -573,7 +575,7 @@ class MODISL1BSource(MODISSource):
         downloader: Downloader,
         platform: list[Literal["mod", "myd"]],
         resolution: list[Literal["qkm", "hkm", "1km"]],
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []

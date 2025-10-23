@@ -45,7 +45,7 @@ class MultiBandCompositor(CompositeBase):
             IncompatibleAreas: If datasets have incompatible dimensions or areas
         """
         if not datasets:
-            raise ValueError("No datasets provided for composite")
+            raise ValueError("Invalid input: datasets list cannot be empty for composite creation")
 
         # single dataset case: just update attributes
         if len(datasets) == 1:

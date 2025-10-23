@@ -13,18 +13,25 @@ class Writer(ABC):
         self.extension = extension
 
     def parse_datasets(self, datasets: str | list[str] | dict[str, str]) -> dict[str, str]:
-        result = {}
+        """Parse datasets into normalized dict format.
+
+        Args:
+            datasets: Dataset specification (name, list of names, or name->filename mapping)
+
+        Returns:
+            Dictionary mapping dataset names to output filenames
+
+        Raises:
+            TypeError: If datasets type is not supported
+        """
         if isinstance(datasets, str):
-            result = {datasets: datasets}
-        # if dict, already ok
+            return {datasets: datasets}
         elif isinstance(datasets, Mapping):
-            pass
-        # test lists later, dict is also iterable
+            return dict(datasets)
         elif isinstance(datasets, Iterable):
-            result = {s: s for s in datasets}
+            return {name: name for name in datasets}
         else:
-            raise TypeError(f"Dataset format ({type(datasets)}) not supported")
-        return result
+            raise TypeError(f"Unsupported dataset format: {type(datasets)}")
 
     @abstractmethod
     def write(

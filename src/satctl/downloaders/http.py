@@ -11,18 +11,29 @@ from satctl.progress.events import emit_event
 
 log = logging.getLogger(__name__)
 
+# HTTP downloader configuration defaults
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_CHUNK_SIZE = 8192  # 8KB
+DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_POOL_CONNECTIONS = 10
+DEFAULT_POOL_MAX_SIZE = 2
+
 
 class HTTPDownloader(Downloader):
     """HTTP downloader with authentication, retries, and progress reporting."""
 
+    # ============================================================================
+    # Initialization
+    # ============================================================================
+
     def __init__(
         self,
         authenticator: Authenticator,
-        max_retries: int = 3,
-        chunk_size: int = 8192,
-        timeout: int = 30,
-        pool_connections: int = 10,
-        pool_maxsize: int = 2,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        timeout: int = DEFAULT_TIMEOUT_SECONDS,
+        pool_connections: int = DEFAULT_POOL_CONNECTIONS,
+        pool_maxsize: int = DEFAULT_POOL_MAX_SIZE,
     ):
         super().__init__(authenticator)
         self.max_retries = max_retries
@@ -30,6 +41,10 @@ class HTTPDownloader(Downloader):
         self.timeout = timeout
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
+
+    # ============================================================================
+    # Public API
+    # ============================================================================
 
     def init(self, session: requests.Session | None = None, **kwargs) -> None:
         if not session:

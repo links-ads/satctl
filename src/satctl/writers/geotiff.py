@@ -18,6 +18,10 @@ log = logging.getLogger(__name__)
 class GeoTIFFWriter(Writer):
     """Writer for GeoTIFF format with configurable options."""
 
+    # ============================================================================
+    # Initialization
+    # ============================================================================
+
     def __init__(
         self,
         compress: str = "lzw",
@@ -30,6 +34,10 @@ class GeoTIFFWriter(Writer):
         self.tiled = tiled
         self.dtype = dtype
         self.fill_value = fill_value
+
+    # ============================================================================
+    # Private helpers
+    # ============================================================================
 
     def _get_transform_gcps(self, data_arr: DataArray) -> tuple[CRS | None, Affine | None, Any]:
         crs = None
@@ -72,6 +80,7 @@ class GeoTIFFWriter(Writer):
         dtype: Any,
         crs: CRS | None,
         transform: Affine | None,
+        fill_value: Any = None,
     ):
         return {
             "driver": "GTiff",
@@ -83,8 +92,12 @@ class GeoTIFFWriter(Writer):
             "transform": transform,
             "compress": self.compress,
             "tiled": self.tiled,
-            "nodata": self.fill_value,
+            "nodata": fill_value,
         }
+
+    # ============================================================================
+    # Public API
+    # ============================================================================
 
     def write(
         self,
@@ -96,7 +109,9 @@ class GeoTIFFWriter(Writer):
         Write scene composite to GeoTIFF.
         """
         if not output_path.parent.exists() or output_path.is_dir():
-            raise FileNotFoundError(f"Invalid directory {output_path.parent}")
+            raise FileNotFoundError(
+                f"Invalid output path: parent directory '{output_path.parent}' does not exist or path is a directory"
+            )
         crs, transform, gcps = self._get_transform_gcps(dataset)
         # Prepare data
         data = dataset.values
@@ -112,13 +127,14 @@ class GeoTIFFWriter(Writer):
                     data = np.transpose(data, axes)
             num_bands = dataset.shape[0]
         else:
-            raise ValueError(f"Unsupported data dimensions: {dataset.shape}")
+            raise ValueError(f"Unsupported data dimensions: {dataset.shape} (expected 2D or 3D array)")
         height, width = dataset.shape[-2:]
 
         # determine dtype and fill_value
         dtype = self.dtype or dataset.dtype
-        if self.fill_value is None and np.issubdtype(dtype, np.floating):
-            self.fill_value = np.nan
+        fill_value = self.fill_value
+        if fill_value is None and np.issubdtype(dtype, np.floating):
+            fill_value = np.nan
 
         # get band names
         band_names = []
@@ -128,7 +144,7 @@ class GeoTIFFWriter(Writer):
             band_names = [f"band_{i + 1}" for i in range(num_bands)]
 
         # add GCPs if available (for swath data)
-        profile = self._create_profile(height, width, num_bands, dtype, crs, transform)
+        profile = self._create_profile(height, width, num_bands, dtype, crs, transform, fill_value)
         if gcps is not None and crs is not None:
             profile["gcps"] = gcps
             profile.pop("transform", None)

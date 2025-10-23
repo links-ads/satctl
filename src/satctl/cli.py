@@ -9,7 +9,7 @@ from satctl.utils import setup_logging
 
 load_dotenv()
 app = typer.Typer(
-    name="eokit",
+    name="satctl",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -18,7 +18,10 @@ context = {}
 
 def init_reporter() -> None:
     if "progress" not in context:
-        raise ValueError("Missing reporter, please ensure at least an `empty` reporter is registered")
+        raise ValueError(
+            "Invalid configuration: progress reporter not found in context "
+            "(ensure at least an 'empty' reporter is registered)"
+        )
     reporter = context["progress"]
     reporter.start()
 

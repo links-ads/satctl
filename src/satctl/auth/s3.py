@@ -58,9 +58,9 @@ class S3Authenticator(Authenticator):
         self.s3_expiration: datetime | None = None
 
         if not self.token_url or not self.client_id:
-            raise ValueError("Token URL and client ID must be set")
+            raise ValueError("Invalid configuration: token_url and client_id are required")
         if not self.username or not self.password:
-            raise ValueError("Username and password must be set")
+            raise ValueError("Invalid configuration: username and password are required")
 
     def authenticate(self) -> bool:
         """Authenticate with OAuth2 and optionally obtain S3 credentials."""
@@ -211,7 +211,7 @@ class S3Authenticator(Authenticator):
         """Get OAuth2 authorization headers."""
         if not self.access_token:
             if not self._get_oauth_token():
-                raise RuntimeError("Failed to authenticate with Copernicus")
+                raise RuntimeError("Authentication failed for Copernicus Data Space: could not obtain OAuth2 token")
         return {"Authorization": f"Bearer {self.access_token}"}
 
     @property
@@ -220,7 +220,7 @@ class S3Authenticator(Authenticator):
         if self.use_temp_credentials:
             if not self._are_s3_credentials_valid():
                 if not self.ensure_authenticated():
-                    raise RuntimeError("Failed to obtain valid S3 credentials")
+                    raise RuntimeError("Authentication failed for Copernicus Data Space: could not obtain valid S3 credentials")
 
             # Create boto3 session with temporary credentials
             session = boto3.Session(

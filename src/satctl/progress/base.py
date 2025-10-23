@@ -49,7 +49,9 @@ class ProgressReporter(ABC):
         event_handler_name = f"on_{event.type.value}"
         event_handler_fn = getattr(self, event_handler_name, None)
         if event_handler_fn is None:
-            raise ValueError(f"No handler for event: {event.type.value}")
+            raise ValueError(
+                f"No handler for event type: '{event.type.value}' (expected method '{event_handler_name}')"
+            )
         if event.type.value != "task_progress":
             log.debug("Handling event: %s", event)
         event_handler_fn(event)
