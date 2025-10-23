@@ -49,6 +49,7 @@ line-length = 119
 markers = [
     "integration: marks tests as integration tests (require real APIs and credentials)",
     "requires_credentials: requires real API credentials from environment",
+    "slow: marks tests as slow running (>5 seconds)",
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

@@ -115,3 +115,58 @@ def eumetsat_authenticator(eumetsat_credentials):
         consumer_key=eumetsat_credentials["consumer_key"],
         consumer_secret=eumetsat_credentials["consumer_secret"],
     )
+
+
+# Downloader Fixtures
+
+
+@pytest.fixture
+def temp_download_dir(tmp_path):
+    """Provide a temporary directory for downloads."""
+    download_dir = tmp_path / "downloads"
+    download_dir.mkdir()
+    return download_dir
+
+
+@pytest.fixture
+def http_downloader(odata_authenticator):
+    """Create an HTTPDownloader instance."""
+    from satctl.downloaders import HTTPDownloader
+
+    downloader = HTTPDownloader(
+        authenticator=odata_authenticator,
+        max_retries=3,
+        chunk_size=8192,
+        timeout=30,
+    )
+    downloader.init()
+    yield downloader
+    downloader.close()
+
+
+@pytest.fixture
+def s3_downloader(s3_authenticator):
+    """Create an S3Downloader instance."""
+    from satctl.downloaders import S3Downloader
+
+    downloader = S3Downloader(
+        authenticator=s3_authenticator,
+        max_retries=3,
+        chunk_size=8192,
+        endpoint_url="https://eodata.dataspace.copernicus.eu",
+    )
+    downloader.init()
+    yield downloader
+    downloader.close()
+
+
+@pytest.fixture(scope="session")
+def test_urls():
+    """Provide known test URLs for download testing."""
+    return {
+        # Small public STAC catalog endpoint (JSON, few KB)
+        "stac_catalog": "https://stac.dataspace.copernicus.eu/v1/collections",
+        # Note: S3 URIs require searching for actual files first
+        # These would need to be discovered dynamically or hardcoded from known data
+        "s3_uri": None,  # To be filled with actual S3 URI if available
+    }
