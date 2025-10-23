@@ -21,6 +21,7 @@ from satctl.sources.base import DataSource
 from satctl.sources.earthdata import EarthDataSource
 from satctl.sources.modis import MODISL1BSource
 from satctl.sources.mtg import MTGSource
+from satctl.sources.sentinel1 import Sentinel1GRDSource
 from satctl.sources.sentinel2 import Sentinel2L1CSource, Sentinel2L2ASource
 from satctl.sources.sentinel3 import OLCISource, SLSTRSource
 from satctl.sources.viirs import VIIRSL1BSource
@@ -33,6 +34,7 @@ registry.register("s2l1c", Sentinel2L1CSource)
 registry.register("mtg", MTGSource)
 registry.register("viirs-l1b", VIIRSL1BSource)
 registry.register("modis-l1b", MODISL1BSource)
+registry.register("s1grd", Sentinel1GRDSource)
 
 
 def create_source(
@@ -77,6 +79,7 @@ __all__ = [
     "SLSTRSource",
     "Sentinel2L2ASource",
     "Sentinel2L1CSource",
+    "Sentinel1GRDSource"
     "MTGSource",
     "VIIRSL1BSource",
     "MODISL1BSource",
