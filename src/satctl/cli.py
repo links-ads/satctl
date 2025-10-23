@@ -36,7 +36,7 @@ def main(
         reporter_cls=reporter_cls,
         suppressions={
             "error": ["urllib3", "requests", "satpy.readers.core.loading", "pyresample.area_config"],
-            "warning": ["satpy", "pyspectral"],
+            "warning": ["satpy", "pyspectral", "boto3", "botocore", "s3transfer"],
         },
     )
     context["progress"] = create_reporter(reporter_name=progress)
