@@ -20,6 +20,9 @@ log = logging.getLogger(__name__)
 # Constants
 DEFAULT_SEARCH_LIMIT = 100
 
+# Constants
+DEFAULT_SEARCH_LIMIT = 100
+
 
 class S2Asset(BaseModel):
     href: str
@@ -65,6 +68,7 @@ class Sentinel2Source(DataSource):
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
@@ -85,8 +89,16 @@ class Sentinel2Source(DataSource):
     # Abstract methods
     # ============================================================================
 
+    # ============================================================================
+    # Abstract methods
+    # ============================================================================
+
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
+
+    # ============================================================================
+    # Search operations
+    # ============================================================================
 
     # ============================================================================
     # Search operations
@@ -106,7 +118,13 @@ class Sentinel2Source(DataSource):
         items = [
             Granule(
                 granule_id=stac_item.id,
+                granule_id=stac_item.id,
                 source=self.collections[0],
+                assets={
+                    asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
+                    for asset_name, asset in stac_item.assets.items()
+                },
+                info=self._parse_item_name(stac_item.id),
                 assets={
                     asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
                     for asset_name, asset in stac_item.assets.items()
@@ -114,9 +132,14 @@ class Sentinel2Source(DataSource):
                 info=self._parse_item_name(stac_item.id),
             )
             for stac_item in search.items()
+            for stac_item in search.items()
         ]
         log.debug("Found %d items", len(items))
         return items
+
+    # ============================================================================
+    # Retrieval operations
+    # ============================================================================
 
     # ============================================================================
     # Retrieval operations
@@ -127,6 +150,10 @@ class Sentinel2Source(DataSource):
 
     def get_files(self, item: Granule) -> list[Path | str]:
         if item.local_path is None:
+            raise ValueError(
+                f"Resource not found: granule '{item.granule_id}' has no local_path "
+                "(download the granule first using download_item())"
+            )
             raise ValueError(
                 f"Resource not found: granule '{item.granule_id}' has no local_path "
                 "(download the granule first using download_item())"
@@ -143,6 +170,14 @@ class Sentinel2Source(DataSource):
             all_files = [f for f in all_files if f.name != "_granule.json"]
             return all_files
         else:
+            raise ValueError(
+                f"Invalid data: SAFE structure not found in '{item.local_path}' "
+                "(expected GRANULE directory and manifest.safe file)"
+            )
+
+    # ============================================================================
+    # Validation operations
+    # ============================================================================
             raise ValueError(
                 f"Invalid data: SAFE structure not found in '{item.local_path}' "
                 "(expected GRANULE directory and manifest.safe file)"
@@ -174,6 +209,10 @@ class Sentinel2Source(DataSource):
     # Scene operations
     # ============================================================================
 
+    # ============================================================================
+    # Scene operations
+    # ============================================================================
+
     def load_scene(
         self,
         item: Granule,
@@ -199,6 +238,9 @@ class Sentinel2Source(DataSource):
                 raise ValueError(
                     "Invalid configuration: datasets parameter is required when no default composite is set"
                 )
+                raise ValueError(
+                    "Invalid configuration: datasets parameter is required when no default composite is set"
+                )
             datasets = [self.default_composite]
         scene = Scene(
             filenames=self.get_files(item),
@@ -208,6 +250,10 @@ class Sentinel2Source(DataSource):
         # Load with specified calibration
         scene.load(datasets, calibration=calibration)
         return scene
+
+    # ============================================================================
+    # Download operations
+    # ============================================================================
 
     # ============================================================================
     # Download operations
@@ -299,6 +345,10 @@ class Sentinel2Source(DataSource):
     # Processing operations
     # ============================================================================
 
+    # ============================================================================
+    # Processing operations
+    # ============================================================================
+
     def save_item(
         self,
         item: Granule,
@@ -329,13 +379,40 @@ class Sentinel2Source(DataSource):
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
         # Load and resample scene
+        """Save granule item to output files after processing.
+
+        Args:
+            item: Granule to process
+            destination: Base destination directory
+            writer: Writer instance for output
+            params: Conversion parameters
+            force: If True, overwrite existing files
+
+        Returns:
+            Dictionary mapping granule_id to list of output paths
+        """
+        # Validate inputs using base class helper
+        self._validate_save_inputs(item, params)
+
+        # Parse datasets using base class helper
+        datasets_dict = self._prepare_datasets(writer, params)
+
+        # Filter existing files using base class helper
+        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
+
+        # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
 
         # Define area using base class helper
         area_def = self._create_area_from_params(params, scene)
+
+        # Define area using base class helper
+        area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
 
+        # Write datasets using base class helper
+        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
         # Write datasets using base class helper
         return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
 
@@ -395,6 +472,9 @@ class Sentinel2L2ASource(Sentinel2Source):
         pattern = r"S2([ABC])_MSIL2A_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match Sentinel-2 L2A pattern (S2X_MSIL2A_YYYYMMDDTHHMMSS)"
+            )
             raise ValueError(
                 f"Invalid filename format: '{name}' does not match Sentinel-2 L2A pattern (S2X_MSIL2A_YYYYMMDDTHHMMSS)"
             )
@@ -463,6 +543,9 @@ class Sentinel2L1CSource(Sentinel2Source):
         pattern = r"S2([ABC])_MSIL1C_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match Sentinel-2 L1C pattern (S2X_MSIL1C_YYYYMMDDTHHMMSS)"
+            )
             raise ValueError(
                 f"Invalid filename format: '{name}' does not match Sentinel-2 L1C pattern (S2X_MSIL1C_YYYYMMDDTHHMMSS)"
             )
