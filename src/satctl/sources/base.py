@@ -398,9 +398,7 @@ class DataSource(ABC):
                 "(download the granule first using download_item())"
             )
         if params.datasets is None and self.default_composite is None:
-            raise ValueError(
-                "Invalid configuration: datasets parameter is required when no default composite is set"
-            )
+            raise ValueError("Invalid configuration: datasets parameter is required when no default composite is set")
 
     def _prepare_datasets(self, writer: Writer, params: ConversionParams) -> dict[str, str]:
         """Parse and prepare datasets dictionary from params or defaults.

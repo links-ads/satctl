@@ -35,9 +35,7 @@ def validate_crs(value: Any) -> Any:
         CRS.from_string(value)
         return value
     except CRSError:
-        raise ValueError(
-            f"Invalid CRS: '{value}' (expected EPSG code like 'EPSG:4326' or valid proj string)"
-        )
+        raise ValueError(f"Invalid CRS: '{value}' (expected EPSG code like 'EPSG:4326' or valid proj string)")
 
 
 class AreaParams(BaseModel):
@@ -81,9 +79,7 @@ class SearchParams(AreaParams):
     @model_validator(mode="after")
     def validate_dates(self):
         if self.start >= self.end:
-            raise ValueError(
-                f"Invalid date range: start ({self.start}) must be before end ({self.end})"
-            )
+            raise ValueError(f"Invalid date range: start ({self.start}) must be before end ({self.end})")
         return self
 
     @classmethod

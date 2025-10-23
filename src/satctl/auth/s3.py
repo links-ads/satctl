@@ -220,7 +220,9 @@ class S3Authenticator(Authenticator):
         if self.use_temp_credentials:
             if not self._are_s3_credentials_valid():
                 if not self.ensure_authenticated():
-                    raise RuntimeError("Authentication failed for Copernicus Data Space: could not obtain valid S3 credentials")
+                    raise RuntimeError(
+                        "Authentication failed for Copernicus Data Space: could not obtain valid S3 credentials"
+                    )
 
             # Create boto3 session with temporary credentials
             session = boto3.Session(
