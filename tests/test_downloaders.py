@@ -4,7 +4,6 @@ These tests verify that downloaders can successfully download files
 using real authenticated connections.
 """
 
-from pathlib import Path
 
 import pytest
 
