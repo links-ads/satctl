@@ -70,6 +70,7 @@ class Sentinel1Source(DataSource):
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
 
+    
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Setting up the STAC client")
         catalogue = Client.open(self.stac_url)
@@ -123,15 +124,11 @@ class Sentinel1Source(DataSource):
             asset = cast(S1Asset, asset)
             # We expect zips, jp2s, xmls, and other image formats
             assert asset.media_type in (
-                "application/zip",
-                "application=geotiff",
-                "image/jp2",
-                "image/tiff",
-                "image/jpeg",
-                "application/xml",
-                "application/json",
-                "text/plain",
-            )
+                'image/tiff; application=geotiff; profile=cloud-optimized',
+                'image/png',
+                'application/zip',
+                'application/xml'
+            ), f"Unexpected media type for asset {name}: {asset.media_type}"
 
     def load_scene(
         self,
