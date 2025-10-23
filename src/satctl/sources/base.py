@@ -110,10 +110,14 @@ class DataSource(ABC):
                 future2item = {executor.submit(self.download_item, item, destination): item for item in items}
                 for future in as_completed(future2item):
                     item = future2item[future]
-                    result = future.result()
-                    if result:
-                        success.append(item)
-                    else:
+                    try:
+                        result = future.result()
+                        if result:
+                            success.append(item)
+                        else:
+                            failure.append(item)
+                    except Exception as e:
+                        log.error(f"Error downloading item {item.granule_id}: {e}")
                         failure.append(item)
             emit_event(
                 ProgressEventType.BATCH_COMPLETED,
