@@ -17,6 +17,9 @@ from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
+# Constants
+DEFAULT_SEARCH_LIMIT = 100
+
 
 class S3Asset(BaseModel):
     href: str
@@ -35,7 +38,7 @@ class Sentinel3Source(DataSource):
         stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
@@ -52,8 +55,16 @@ class Sentinel3Source(DataSource):
         self.download_pool_size = download_pool_size
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
+    # ============================================================================
+    # Abstract methods
+    # ============================================================================
+
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
+
+    # ============================================================================
+    # Search operations
+    # ============================================================================
 
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Setting up the STAC client")
@@ -78,13 +89,24 @@ class Sentinel3Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
+    # ============================================================================
+    # Retrieval operations
+    # ============================================================================
+
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
         if item.local_path is None:
-            raise ValueError("Local path is missing. Did you download this granule?")
+            raise ValueError(
+                f"Resource not found: granule '{item.granule_id}' has no local_path "
+                "(download the granule first using download_item())"
+            )
         return list(item.local_path.glob("*"))
+
+    # ============================================================================
+    # Validation operations
+    # ============================================================================
 
     def validate(self, item: Granule) -> None:
         """Validates a Sentinel3 STAC item.
@@ -102,6 +124,10 @@ class Sentinel3Source(DataSource):
             # Check that we have a manifest file
             if asset.media_type == "application/xml":
                 assert name == "xfdumanifest"
+
+    # ============================================================================
+    # Download operations
+    # ============================================================================
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         """Download single item - can be called in thread pool."""
@@ -127,6 +153,10 @@ class Sentinel3Source(DataSource):
         else:
             log.warning("Failed to download: %s", item.granule_id)
         return result
+
+    # ============================================================================
+    # Processing operations
+    # ============================================================================
 
     def save_item(
         self,
@@ -179,7 +209,7 @@ class SLSTRSource(Sentinel3Source):
         stac_url: str,
         default_composite: str = "all_bands",
         default_resolution: int = 1000,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
@@ -199,7 +229,9 @@ class SLSTRSource(Sentinel3Source):
         pattern = r"S3([AB])_SL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid SLSTR filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match SLSTR pattern (S3X_SL_L_XXX____YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[3], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
@@ -221,7 +253,7 @@ class OLCISource(Sentinel3Source):
         stac_url: str,
         default_composite: str = "all_bands",
         default_resolution: int = 300,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
@@ -241,7 +273,9 @@ class OLCISource(Sentinel3Source):
         pattern = r"S3([AB])_OL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid OLCI filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match OLCI pattern (S3X_OL_L_XXX____YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[3], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)

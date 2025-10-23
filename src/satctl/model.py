@@ -12,6 +12,9 @@ from shapely import GeometryCollection, Polygon, from_geojson
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+# Constants
+GRANULE_METADATA_FILENAME = "_granule.json"
+
 
 def convert_to_geojson(value: Any) -> Any:
     # shapely -> geojson before validating
@@ -32,7 +35,9 @@ def validate_crs(value: Any) -> Any:
         CRS.from_string(value)
         return value
     except CRSError:
-        raise ValueError(f"Invalid CRS: {value}")
+        raise ValueError(
+            f"Invalid CRS: '{value}' (expected EPSG code like 'EPSG:4326' or valid proj string)"
+        )
 
 
 class AreaParams(BaseModel):
@@ -43,9 +48,9 @@ class AreaParams(BaseModel):
     @classmethod
     def _load_geometry(cls, path: Path) -> dict:
         if path is None:
-            raise ValueError("Area file must be provided in `from_file`")
+            raise ValueError("Invalid configuration: area file path is required for from_file()")
         if not path.exists() or not path.is_file():
-            raise ValueError(f"Invalid area file: {path}")
+            raise ValueError(f"Resource not found: area file '{path}' does not exist or is not a file")
         data = json.loads(path.read_text())
         return data
 
@@ -76,7 +81,9 @@ class SearchParams(AreaParams):
     @model_validator(mode="after")
     def validate_dates(self):
         if self.start >= self.end:
-            raise ValueError(f"Start date {self.start} comes after end date {self.end}")
+            raise ValueError(
+                f"Invalid date range: start ({self.start}) must be before end ({self.end})"
+            )
         return self
 
     @classmethod
@@ -140,12 +147,12 @@ class Granule(BaseModel):
 
     @classmethod
     def from_file(cls, path: Path) -> "Granule":
-        file_path = path / "_granule.json"
+        file_path = path / GRANULE_METADATA_FILENAME
         with open(file_path, "r") as f:
             return cls.model_validate_json(f.read())
 
     def to_file(self, path: Path) -> None:
-        file_path = path / "_granule.json"
+        file_path = path / GRANULE_METADATA_FILENAME
         with open(file_path, "w") as f:
             f.write(self.model_dump_json(indent=2))
 

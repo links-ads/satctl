@@ -17,7 +17,10 @@ registry.register("geotiff", GeoTIFFWriter)
 
 def create_writer(writer_name: str, **config: dict) -> Writer:
     if not registry.is_registered(writer_name):
-        raise ValueError(f"Unknown writer '{writer_name}', available: {registry.list()}")
+        available = ", ".join(registry.list())
+        raise ValueError(
+            f"Resource not found: writer '{writer_name}'. Available options: {available}"
+        )
     return registry.create(writer_name, **config)
 
 

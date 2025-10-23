@@ -119,7 +119,9 @@ def extract_zip(
     if expected_dir:
         extracted_dir = extract_to / expected_dir
         if not extracted_dir.exists():
-            raise ValueError(f"Expected directory {expected_dir} not found")
+            raise ValueError(
+                f"Invalid archive structure: expected directory '{expected_dir}' not found after extraction"
+            )
         emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
         return extracted_dir
     else:

@@ -35,6 +35,8 @@ PRODUCT_CONFIG = {
 
 DAY_NIGHT_CONDITIONS = ("day", "night")
 
+DEFAULT_SEARCH_LIMIT = 100
+
 
 class ProductCombination(TypedDict):
     """Configuration for a specific satellite/product_type combination."""
@@ -77,7 +79,7 @@ class VIIRSSource(DataSource):
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         super().__init__(
             collection_name,
@@ -551,7 +553,7 @@ class VIIRSL1BSource(VIIRSSource):
         downloader: Downloader,
         satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []

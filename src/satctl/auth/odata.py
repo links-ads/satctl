@@ -26,9 +26,9 @@ class ODataAuthenticator(Authenticator):
         self.refresh_token: str | None = None
 
         if not self.token_url or not self.client_id:
-            raise ValueError("Token URL and client ID must be set")
+            raise ValueError("Invalid configuration: token_url and client_id are required")
         if not self.username or not self.password:
-            raise ValueError("Username and password variables must be set")
+            raise ValueError("Invalid configuration: username and password are required")
 
     def authenticate(self) -> bool:
         """Authenticate with username/password and get tokens"""
@@ -95,7 +95,7 @@ class ODataAuthenticator(Authenticator):
         """
         if not self.access_token:
             if not self.authenticate():
-                raise RuntimeError("Failed to authenticate with Copernicus")
+                raise RuntimeError("Authentication failed for Copernicus Data Space: could not obtain access token")
         return {"Authorization": f"Bearer {self.access_token}"}
 
     @property

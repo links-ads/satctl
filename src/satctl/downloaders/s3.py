@@ -11,15 +11,23 @@ from satctl.progress.events import emit_event
 
 log = logging.getLogger(__name__)
 
+# S3 downloader configuration defaults
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_CHUNK_SIZE = 8192  # 8KB
+
 
 class S3Downloader(Downloader):
     """S3 downloader with authentication, retries, and progress reporting."""
 
+    # ============================================================================
+    # Initialization
+    # ============================================================================
+
     def __init__(
         self,
         authenticator: Authenticator,
-        max_retries: int = 3,
-        chunk_size: int = 8192,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
         endpoint_url: str | None = None,
         region_name: str | None = None,
     ):
@@ -40,11 +48,15 @@ class S3Downloader(Downloader):
         self.region_name = region_name
         self.s3_client = None
 
+    # ============================================================================
+    # Public API
+    # ============================================================================
+
     def init(self) -> None:
         """Initialize S3 client with authentication."""
         # Ensure authentication is valid
         if not self.auth.ensure_authenticated():
-            raise RuntimeError("Failed to authenticate for S3 access")
+            raise RuntimeError("Failed to initialize S3 downloader: authentication failed")
 
         # Get session from authenticator if available
         session = self.auth.auth_session if hasattr(self.auth, "auth_session") else None
@@ -90,14 +102,14 @@ class S3Downloader(Downloader):
             Tuple of (bucket_name, object_key)
         """
         if not uri.startswith("s3://"):
-            raise ValueError(f"Invalid S3 URI format: {uri}")
+            raise ValueError(f"Invalid S3 URI: '{uri}' (expected format: s3://bucket/key/path)")
 
         # Remove s3:// prefix
         path = uri[5:]
         parts = path.split("/", 1)
 
         if len(parts) != 2:
-            raise ValueError(f"Invalid S3 URI format: {uri}")
+            raise ValueError(f"Invalid S3 URI: '{uri}' (must include both bucket and key)")
 
         bucket = parts[0]
         key = parts[1]

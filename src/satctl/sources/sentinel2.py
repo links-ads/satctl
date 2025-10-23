@@ -17,6 +17,9 @@ from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
+# Constants
+DEFAULT_SEARCH_LIMIT = 100
+
 
 class S2Asset(BaseModel):
     href: str
@@ -61,7 +64,7 @@ class Sentinel2Source(DataSource):
         stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
@@ -78,8 +81,16 @@ class Sentinel2Source(DataSource):
         self.download_pool_size = download_pool_size
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
+    # ============================================================================
+    # Abstract methods
+    # ============================================================================
+
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
+
+    # ============================================================================
+    # Search operations
+    # ============================================================================
 
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Setting up the STAC client")
@@ -107,12 +118,19 @@ class Sentinel2Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
+    # ============================================================================
+    # Retrieval operations
+    # ============================================================================
+
     def get_by_id(self, item_id: str) -> Granule:
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
         if item.local_path is None:
-            raise ValueError("Local path is missing. Did you download this granule?")
+            raise ValueError(
+                f"Resource not found: granule '{item.granule_id}' has no local_path "
+                "(download the granule first using download_item())"
+            )
         # Check if SAFE structure exists
         granule_dir = item.local_path / "GRANULE"
         manifest_file = item.local_path / "manifest.safe"
@@ -125,7 +143,14 @@ class Sentinel2Source(DataSource):
             all_files = [f for f in all_files if f.name != "_granule.json"]
             return all_files
         else:
-            raise ValueError("SAFE structure not found")
+            raise ValueError(
+                f"Invalid data: SAFE structure not found in '{item.local_path}' "
+                "(expected GRANULE directory and manifest.safe file)"
+            )
+
+    # ============================================================================
+    # Validation operations
+    # ============================================================================
 
     def validate(self, item: Granule) -> None:
         """Validates a Sentinel2 STAC item.
@@ -144,6 +169,10 @@ class Sentinel2Source(DataSource):
                 "application/json",
                 "text/plain",
             )
+
+    # ============================================================================
+    # Scene operations
+    # ============================================================================
 
     def load_scene(
         self,
@@ -167,7 +196,9 @@ class Sentinel2Source(DataSource):
         """
         if not datasets:
             if self.default_composite is None:
-                raise ValueError("Please provide the source with a default composite, or provide custom composites")
+                raise ValueError(
+                    "Invalid configuration: datasets parameter is required when no default composite is set"
+                )
             datasets = [self.default_composite]
         scene = Scene(
             filenames=self.get_files(item),
@@ -177,6 +208,10 @@ class Sentinel2Source(DataSource):
         # Load with specified calibration
         scene.load(datasets, calibration=calibration)
         return scene
+
+    # ============================================================================
+    # Download operations
+    # ============================================================================
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         """Download only the specified assets to destination/item.granule_id.
@@ -258,6 +293,10 @@ class Sentinel2Source(DataSource):
         else:
             log.warning("Failed to download all required assets for: %s", item.granule_id)
         return all_success
+
+    # ============================================================================
+    # Processing operations
+    # ============================================================================
 
     def save_item(
         self,
@@ -355,7 +394,9 @@ class Sentinel2L2ASource(Sentinel2Source):
         pattern = r"S2([ABC])_MSIL2A_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid Sentinel-2 L2A filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match Sentinel-2 L2A pattern (S2X_MSIL2A_YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[1], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
@@ -421,7 +462,9 @@ class Sentinel2L1CSource(Sentinel2Source):
         pattern = r"S2([ABC])_MSIL1C_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid Sentinel-2 L1C filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match Sentinel-2 L1C pattern (S2X_MSIL1C_YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[1], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)

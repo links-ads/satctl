@@ -38,9 +38,17 @@ class DataSource(ABC):
         self.default_resolution = default_resolution
         self.reader = None
 
+    # ============================================================================
+    # Properties
+    # ============================================================================
+
     @property
     def collections(self) -> list[str]:
         return [self.source_name]
+
+    # ============================================================================
+    # Abstract methods
+    # ============================================================================
 
     @abstractmethod
     def search(self, params: SearchParams) -> list[Granule]: ...
@@ -71,6 +79,10 @@ class DataSource(ABC):
         force: bool = False,
     ) -> dict[str, list]: ...
 
+    # ============================================================================
+    # Hook methods
+    # ============================================================================
+
     def get_downloader_init_kwargs(self) -> dict:
         """Hook method for subclasses to provide downloader initialization arguments.
 
@@ -80,6 +92,10 @@ class DataSource(ABC):
             dict: Keyword arguments to pass to downloader.init()
         """
         return {}
+
+    # ============================================================================
+    # Public API - Download operations
+    # ============================================================================
 
     def download(
         self,
@@ -135,6 +151,10 @@ class DataSource(ABC):
             )
             return success, failure
 
+    # ============================================================================
+    # Public API - Scene operations
+    # ============================================================================
+
     def load_scene(
         self,
         item: Granule,
@@ -144,7 +164,9 @@ class DataSource(ABC):
     ) -> Scene:
         if not datasets:
             if self.default_composite is None:
-                raise ValueError("Please provide the source with a default composite, or provide custom composites")
+                raise ValueError(
+                    "Invalid configuration: datasets parameter is required when no default composite is set"
+                )
             datasets = [self.default_composite]
         scene = Scene(
             filenames=self.get_files(item),
@@ -153,6 +175,10 @@ class DataSource(ABC):
         )
         scene.load(datasets)
         return scene
+
+    # ============================================================================
+    # Public API - Resampling and area utilities
+    # ============================================================================
 
     def resample(
         self,
@@ -231,9 +257,9 @@ class DataSource(ABC):
                 # use area extent directly
                 bounds = area_def.area_extent
             else:
-                raise ValueError(f"Unsupported area type: {type(area_def)}")
+                raise ValueError(f"Unsupported area type: {type(area_def).__name__}")
         else:
-            raise ValueError("Provide either 'area' or 'scene'")
+            raise ValueError("Invalid configuration: either 'area' or 'scene' parameter must be provided")
 
         # determine resolution (use finest if not specified)
         if resolution is None:
@@ -242,7 +268,9 @@ class DataSource(ABC):
             elif self.default_resolution:
                 resolution = self.default_resolution
             else:
-                raise ValueError("Cannot determine resolution, please provide it manually.")
+                raise ValueError(
+                    "Invalid configuration: resolution parameter is required (cannot determine from scene or defaults)"
+                )
 
         # transform bounds to target CRS
         source_crs = source_crs or CRS.from_epsg(4326)
@@ -276,6 +304,10 @@ class DataSource(ABC):
             description=description,
         )
         return cast(AreaDefinition, area_def)
+
+    # ============================================================================
+    # Public API - Save operations
+    # ============================================================================
 
     def save(
         self,
@@ -345,6 +377,10 @@ class DataSource(ABC):
 
         return success, failure
 
+    # ============================================================================
+    # Protected helpers - Save item utilities
+    # ============================================================================
+
     def _validate_save_inputs(self, item: Granule, params: ConversionParams) -> None:
         """Validate inputs for save_item operation.
 
@@ -357,9 +393,14 @@ class DataSource(ABC):
             ValueError: If both params.datasets and default_composite are None
         """
         if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
+            raise FileNotFoundError(
+                f"Resource not found: granule data at '{item.local_path}' "
+                "(download the granule first using download_item())"
+            )
         if params.datasets is None and self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
+            raise ValueError(
+                "Invalid configuration: datasets parameter is required when no default composite is set"
+            )
 
     def _prepare_datasets(self, writer: Writer, params: ConversionParams) -> dict[str, str]:
         """Parse and prepare datasets dictionary from params or defaults.
@@ -431,7 +472,9 @@ class DataSource(ABC):
             )
         else:
             if scene is None:
-                raise ValueError("Scene required when area_geometry is None")
+                raise ValueError(
+                    "Invalid configuration: scene parameter is required when area_geometry is not provided"
+                )
             return self.define_area(
                 target_crs=params.target_crs_obj,
                 scene=scene,
