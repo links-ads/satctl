@@ -68,7 +68,6 @@ class Sentinel2Source(DataSource):
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
@@ -118,13 +117,7 @@ class Sentinel2Source(DataSource):
         items = [
             Granule(
                 granule_id=stac_item.id,
-                granule_id=stac_item.id,
                 source=self.collections[0],
-                assets={
-                    asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
-                    for asset_name, asset in stac_item.assets.items()
-                },
-                info=self._parse_item_name(stac_item.id),
                 assets={
                     asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
                     for asset_name, asset in stac_item.assets.items()
@@ -175,9 +168,9 @@ class Sentinel2Source(DataSource):
                 "(expected GRANULE directory and manifest.safe file)"
             )
 
-    # ============================================================================
-    # Validation operations
-    # ============================================================================
+            # ============================================================================
+            # Validation operations
+            # ============================================================================
             raise ValueError(
                 f"Invalid data: SAFE structure not found in '{item.local_path}' "
                 "(expected GRANULE directory and manifest.safe file)"
