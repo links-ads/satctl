@@ -214,6 +214,8 @@ class VIIRSSource(DataSource):
             radiance_id = radiance_result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
             georeference_id_pattern = self.convert_granule_id_with_wildcard(radiance_id, "03")
 
+            # VIIRS Level 1B requires both radiance (02) and geolocation (03) files
+            # Search for matching georeference file using wildcard timestamp pattern
             georeference_result = earthaccess.search_data(
                 short_name=short_name.replace("02", "03"),
                 granule_name=georeference_id_pattern,

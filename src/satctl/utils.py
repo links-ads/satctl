@@ -96,8 +96,6 @@ def extract_zip(
 
     emit_event(ProgressEventType.TASK_CREATED, task_id=task_id, description="extract")
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        # zip_ref.extractall(extract_to)
-
         total_size = sum(f.file_size for f in zip_ref.infolist() if not f.is_dir())
         emit_event(ProgressEventType.TASK_DURATION, task_id=task_id, duration=total_size)
 

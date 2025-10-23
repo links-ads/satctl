@@ -104,7 +104,6 @@ class S3Downloader(Downloader):
         if not uri.startswith("s3://"):
             raise ValueError(f"Invalid S3 URI: '{uri}' (expected format: s3://bucket/key/path)")
 
-        # Remove s3:// prefix
         path = uri[5:]
         parts = path.split("/", 1)
 

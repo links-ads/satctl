@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -5,6 +6,7 @@ from typing import Annotated, Literal
 import typer
 from dotenv import load_dotenv
 
+from satctl.progress.base import ProgressReporter
 from satctl.utils import setup_logging
 
 load_dotenv()
@@ -13,17 +15,25 @@ app = typer.Typer(
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-context = {}
+
+
+@dataclass
+class CLIContext:
+    """Runtime context for CLI commands."""
+
+    progress_reporter: ProgressReporter | None = None
+
+
+cli_context = CLIContext()
 
 
 def init_reporter() -> None:
-    if "progress" not in context:
+    if cli_context.progress_reporter is None:
         raise ValueError(
             "Invalid configuration: progress reporter not found in context "
             "(ensure at least an 'empty' reporter is registered)"
         )
-    reporter = context["progress"]
-    reporter.start()
+    cli_context.progress_reporter.start()
 
 
 @app.callback()
@@ -42,7 +52,7 @@ def main(
             "warning": ["satpy", "pyspectral"],
         },
     )
-    context["progress"] = create_reporter(reporter_name=progress)
+    cli_context.progress_reporter = create_reporter(reporter_name=progress)
 
 
 @app.command()

@@ -225,7 +225,8 @@ class Sentinel2Source(DataSource):
         """
         self.validate(item)
 
-        # Create directory with .SAFE extension for msi_safe reader compatibility
+        # Satpy's msi_safe/msi_safe_l2a reader expects the standard SAFE directory structure
+        # SAFE (Standard Archive Format for Europe) format requires .SAFE extension
         local_path = destination / f"{item.granule_id}.SAFE"
         local_path.mkdir(parents=True, exist_ok=True)
 

@@ -123,9 +123,9 @@ class DataSource(ABC):
         executor = None
         try:
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {executor.submit(self.download_item, item, destination): item for item in items}
-                for future in as_completed(future2item):
-                    item = future2item[future]
+                future_to_item_map = {executor.submit(self.download_item, item, destination): item for item in items}
+                for future in as_completed(future_to_item_map):
+                    item = future_to_item_map[future]
                     result = future.result()
                     if result:
                         success.append(item)
@@ -254,7 +254,6 @@ class DataSource(ABC):
                     lat_max = float(lats.max())
                 bounds = (lon_min, lat_min, lon_max, lat_max)
             elif isinstance(area_def, AreaDefinition):
-                # use area extent directly
                 bounds = area_def.area_extent
             else:
                 raise ValueError(f"Unsupported area type: {type(area_def).__name__}")
@@ -279,8 +278,9 @@ class DataSource(ABC):
         max_x, max_y = transformer.transform(bounds[2], bounds[3])
 
         if target_crs.is_geographic:
-            # Resolution is in meters, but CRS is degrees
-            # Approximate: 1 degree ≈ 111km at equator
+            # Geographic CRS (lat/lon): coordinates are in degrees, but resolution parameter is in meters
+            # Convert meters to degrees using approximation: 1 degree ≈ 111km at equator
+            # This simplification works reasonably well for moderate latitudes
             units = "degrees"
             resolution_degrees = resolution / 111000.0
             width = int(round((max_x - min_x) / resolution_degrees))
@@ -337,7 +337,7 @@ class DataSource(ABC):
         executor = None
         try:
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
-                future2item = {
+                future_to_item_map = {
                     executor.submit(
                         self.save_item,
                         item,
@@ -348,8 +348,8 @@ class DataSource(ABC):
                     ): item
                     for item in items
                 }
-                for future in as_completed(future2item):
-                    item = future2item[future]
+                for future in as_completed(future_to_item_map):
+                    item = future_to_item_map[future]
                     if future.result():
                         success.append(item)
                     else:
