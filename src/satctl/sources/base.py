@@ -13,7 +13,8 @@ from satpy.scene import Scene
 from shapely import Polygon
 
 from satctl.downloaders import Downloader
-from satctl.model import ConversionParams, Granule, ProgressEventType, SearchParams
+from satctl.model import (ConversionParams, Granule, ProgressEventType,
+                          SearchParams)
 from satctl.progress.events import emit_event
 from satctl.writers import Writer
 
