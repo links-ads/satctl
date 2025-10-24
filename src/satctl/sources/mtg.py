@@ -1,30 +1,24 @@
 import logging
 import re
-import uuid
 import warnings
-from abc import abstractmethod
-from collections import defaultdict
-from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
-from pystac_client import Client
 from satpy.scene import Scene
-from xarray import DataArray
 
 from satctl.downloaders import Downloader
-from satctl.model import (ConversionParams, Granule, ProductInfo,
-                          ProgressEventType, SearchParams)
-from satctl.progress.events import emit_event
+from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_SEARCH_LIMIT = 100
 
 
 class MTGAsset(BaseModel):
@@ -42,10 +36,22 @@ class MTGSource(DataSource):
         downloader: Downloader,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize MTG data source.
+
+        Args:
+            collection_name (str): Name of the MTG collection
+            reader (str): Satpy reader name for this product type
+            downloader (Downloader): Downloader instance for file retrieval
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            download_pool_conns (int): Number of download pool connections. Defaults to 10.
+            download_pool_size (int): Size of download pool. Defaults to 2.
+        """
         super().__init__(
             collection_name,
             downloader=downloader,
@@ -59,10 +65,23 @@ class MTGSource(DataSource):
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse MTG item name into product information.
+
+        Args:
+            name (str): MTG item identifier
+
+        Returns:
+            ProductInfo: Parsed product metadata
+
+        Raises:
+            ValueError: If name format is invalid
+        """
         pattern = r"S3([AB])_OL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid OLCI filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match expected pattern (S3X_OL_L_XXX____YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[3], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
@@ -74,6 +93,14 @@ class MTGSource(DataSource):
         )
 
     def search(self, params: SearchParams) -> list[Granule]:
+        """Search for MTG data using EUMETSAT DataStore.
+
+        Args:
+            params (SearchParams): Search parameters including time range
+
+        Returns:
+            list[Granule]: List of matching granules with metadata and assets
+        """
         log.debug("Setting up the DataStore client")
         catalogue = DataStore(self.downloader.auth.auth_session)
 
@@ -85,17 +112,17 @@ class MTGSource(DataSource):
             items.extend(
                 [
                     Granule(
-                        granule_id=str(i),
-                        source=str(i.collection),  
-                        assets={"product": MTGAsset(href=i.url)},
+                        granule_id=str(eumdac_result),
+                        source=str(eumdac_result.collection),
+                        assets={"product": MTGAsset(href=eumdac_result.url)},
                         info=ProductInfo(
-                            instrument=i.instrument,
+                            instrument=eumdac_result.instrument,
                             level="",
-                            product_type=i.product_type,
-                            acquisition_time=i.sensing_end,
+                            product_type=eumdac_result.product_type,
+                            acquisition_time=eumdac_result.sensing_end,
                         ),
                     )
-                    for i in results
+                    for eumdac_result in results
                 ]
             )
 
@@ -103,11 +130,36 @@ class MTGSource(DataSource):
         return items
 
     def get_by_id(self, item_id: str) -> Granule:
+        """Get specific MTG granule by ID.
+
+        Args:
+            item_id (str): Granule identifier
+
+        Returns:
+            Granule: Requested granule with metadata
+
+        Raises:
+            NotImplementedError: Method not yet implemented
+        """
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
+        """Get list of files for a downloaded MTG granule.
+
+        Args:
+            item (Granule): Granule with local_path set
+
+        Returns:
+            list[Path | str]: List of all files in the granule directory
+
+        Raises:
+            ValueError: If local_path is not set (granule not downloaded)
+        """
         if item.local_path is None:
-            raise ValueError("Local path is missing. Did you download this granule?")
+            raise ValueError(
+                f"Resource not found: granule '{item.granule_id}' has no local_path "
+                "(download the granule first using download_item())"
+            )
         return list(item.local_path.glob("*"))
 
     def load_scene(
@@ -117,20 +169,35 @@ class MTGSource(DataSource):
         generate: bool = False,
         **scene_options: dict[str, Any],
     ) -> Scene:
+        """Load MTG data into a Satpy Scene.
+
+        Args:
+            item (Granule): Granule to load
+            datasets (list[str] | None): List of dataset names to load. Defaults to None.
+            generate (bool): Whether to generate composites. Defaults to False.
+            **scene_options (dict[str, Any]): Additional scene options
+
+        Returns:
+            Scene: Loaded Satpy scene with requested datasets
+
+        Raises:
+            ValueError: If datasets is None and no default composite is configured
+        """
         if not datasets:
             if self.default_composite is None:
-                raise ValueError("Please provide the source with a default composite, or provide custom composites")
+                raise ValueError(
+                    "Invalid configuration: datasets parameter is required when no default composite is set"
+                )
             datasets = [self.default_composite]
         scene = Scene(
             filenames=self.get_files(item),
             reader=self.reader,
             reader_kwargs=scene_options,
         )
-        # note: the data inside the FCI files is stored upside down. 
+        # note: the data inside the FCI files is stored upside down.
         # The upper_right_corner='NE' argument flips it automatically in upright position
-        scene.load(datasets, upper_right_corner='NE')
+        scene.load(datasets, upper_right_corner="NE")
         return scene
-
 
     def validate(self, item: Granule) -> None:
         """Validates a MTG Product item.
@@ -143,6 +210,17 @@ class MTGSource(DataSource):
             assert "access_token=" in asset.href, "The URL does not contain the 'access_token' query parameter."
 
     def download_item(self, item: Granule, destination: Path) -> bool:
+        """Download single MTG item and extract to destination.
+
+        Downloads the product ZIP file, extracts it, saves metadata, and removes the ZIP.
+
+        Args:
+            item (Granule): Granule to download
+            destination (Path): Directory to save extracted files
+
+        Returns:
+            bool: True if download succeeded, False otherwise
+        """
         self.validate(item)
         zip_asset = cast(MTGAsset, item.assets["product"])
         local_file = destination / f"{item.granule_id}.zip"
@@ -153,9 +231,7 @@ class MTGSource(DataSource):
         ):
             # extract to uniform with other sources
             local_path = extract_zip(
-                zip_path=local_file,
-                extract_to=destination / f"{item.granule_id}.MTG",
-                item_id=item.granule_id
+                zip_path=local_file, extract_to=destination / f"{item.granule_id}.MTG", item_id=item.granule_id
             )
             item.local_path = local_path
             log.debug("Saving granule metadata to: %s", local_path)
@@ -173,53 +249,34 @@ class MTGSource(DataSource):
         params: ConversionParams,
         force: bool = False,
     ) -> dict[str, list]:
-        if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-        if params.datasets is None or self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
+        """Save granule item to output files after processing.
 
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
-        log.debug("Attempting to save the following datasets: %s", datasets_dict)
-        # if not forced or already present,
-        # remove existing files from the process before loading scene
-        if not force:
-            for dataset_name, file_name in list(datasets_dict.items()):
-                if (destination / item.granule_id / f"{file_name}.{writer.extension}").exists():
-                    del datasets_dict[dataset_name]
+        Args:
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
 
-        files = self.get_files(item)
-        log.debug("Found %d files to process", len(files))
+        Returns:
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
+        """
+        # Validate inputs using base class helper
+        self._validate_save_inputs(item, params)
 
+        # Parse datasets using base class helper
+        datasets_dict = self._prepare_datasets(writer, params)
+
+        # Filter existing files using base class helper
+        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
+
+        # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-        # if user does not provide an AoI, we use the entire granule extent
-        # similarly, if a user does not provide: source CRS, resolution, datasets,
-        # `define_area` will assume some sane defaults (4326, default_res or finest, default_composite)
-        if params.area_geometry is not None:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
+
+        # Define area using base class helper
+        area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
 
-        paths: dict[str, list] = defaultdict(list)
-        output_dir = destination / item.granule_id
-        output_dir.mkdir(exist_ok=True, parents=True)
-        for dataset_name, file_name in datasets_dict.items():
-            output_path = output_dir / f"{file_name}.{writer.extension}"
-            paths[item.granule_id].append(
-                writer.write(
-                    dataset=cast(DataArray, scene[dataset_name]),
-                    output_path=output_path,
-                )
-            )
-        return paths
+        # Write datasets using base class helper
+        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)

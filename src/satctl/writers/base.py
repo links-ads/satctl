@@ -9,22 +9,34 @@ class Writer(ABC):
     """Base class for writing processed satellite data."""
 
     def __init__(self, extension: str) -> None:
+        """Initialize writer with file extension.
+
+        Args:
+            extension (str): File extension for output files (e.g., ".tif", ".nc")
+        """
         super().__init__()
         self.extension = extension
 
     def parse_datasets(self, datasets: str | list[str] | dict[str, str]) -> dict[str, str]:
-        result = {}
+        """Parse datasets into normalized dict format.
+
+        Args:
+            datasets (str | list[str] | dict[str, str]): Dataset specification
+
+        Returns:
+            dict[str, str]: Dictionary mapping dataset names to output filenames
+
+        Raises:
+            TypeError: If datasets type is not supported
+        """
         if isinstance(datasets, str):
-            result = {datasets: datasets}
-        # if dict, already ok
+            return {datasets: datasets}
         elif isinstance(datasets, Mapping):
-            pass
-        # test lists later, dict is also iterable
+            return dict(datasets)
         elif isinstance(datasets, Iterable):
-            result = {s: s for s in datasets}
+            return {name: name for name in datasets}
         else:
-            raise TypeError(f"Dataset format ({type(datasets)}) not supported")
-        return result
+            raise TypeError(f"Unsupported dataset format: {type(datasets)}")
 
     @abstractmethod
     def write(
@@ -33,11 +45,13 @@ class Writer(ABC):
         output_path: Path,
         **kwargs,
     ) -> None:
-        """Write scene data to file.
+        """Write dataset to file in the specific format.
 
         Args:
-            scene: Resampled satpy Scene
-            output_path: Output file path
-            composite: Name of composite to write
-            **kwargs: Additional writer-specific options
+            dataset (DataArray): Xarray DataArray with satellite data and metadata
+            output_path (Path): Path where the output file will be written
+            **kwargs: Writer-specific options (compression, dtype, etc.)
+
+        Raises:
+            FileNotFoundError: If output_path parent directory doesn't exist
         """

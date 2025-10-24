@@ -1,3 +1,10 @@
+"""Custom satpy compositors for multi-band products.
+
+This module extends satpy's compositor system to handle arbitrary numbers
+of bands. The standard GenericCompositor is limited to 4 bands (RGBA),
+but satellite data often requires stacking more bands for analysis.
+"""
+
 from typing import Optional, Sequence
 
 import xarray as xr
@@ -38,7 +45,7 @@ class MultiBandCompositor(CompositeBase):
             IncompatibleAreas: If datasets have incompatible dimensions or areas
         """
         if not datasets:
-            raise ValueError("No datasets provided for composite")
+            raise ValueError("Invalid input: datasets list cannot be empty for composite creation")
 
         # single dataset case: just update attributes
         if len(datasets) == 1:
@@ -64,18 +71,18 @@ class MultiBandCompositor(CompositeBase):
         """Extract meaningful band names from datasets.
 
         Args:
-            datasets (Sequence[xr.DataArray]): input datasets.
+            datasets (Sequence[xr.DataArray]): Input datasets
 
         Returns:
-            list[str]:list of band names.
+            list[str]: List of band names
         """
         band_names = []
-        for i, dataset in enumerate(datasets):
+        for band_index, dataset in enumerate(datasets):
             # Try to get a meaningful name from the dataset
             name = dataset.attrs.get("name")
             if name is None:
                 # Fallback to generic band naming
-                name = f"band_{i + 1}"
+                name = f"band_{band_index + 1}"
             band_names.append(str(name))
         return band_names
 
@@ -112,9 +119,9 @@ class MultiBandCompositor(CompositeBase):
         """Update attributes dictionary in-place for single dataset case.
 
         Args:
-            attrs: Attributes dictionary to update
-            datasets: Input datasets (for sensor info)
-            extra_attrs: Additional attributes to add
+            attrs (dict): Attributes dictionary to update
+            datasets (Sequence[xr.DataArray]): Input datasets for sensor info
+            extra_attrs (dict): Additional attributes to add
         """
         attrs.update(extra_attrs)
         attrs.update(self.attrs)
@@ -124,10 +131,10 @@ class MultiBandCompositor(CompositeBase):
         """Extract and combine sensor information from datasets.
 
         Args:
-            datasets: Input datasets
+            datasets (Sequence[xr.DataArray]): Input datasets
 
         Returns:
-            Single sensor string, list of sensors, or None if no sensor info
+            str | list[str] | None: Single sensor string, list of sensors, or None if no sensor info
         """
         sensors = set()
         for dataset in datasets:

@@ -1,3 +1,12 @@
+"""Utility functions for satctl operations.
+
+This module provides helper functions for:
+- Progress-tracked I/O operations
+- Logging configuration
+- ZIP file extraction with progress reporting
+- Geometric area definition creation
+"""
+
 import logging
 import zipfile
 from functools import partial
@@ -21,19 +30,40 @@ class IOProgressWrapper:
     """
 
     def __init__(self, callback: Callable, stream: IO[bytes]):
-        """
-        Wrap a given `file`-like object's `read()` or `write()` to report
-        lengths to the given `callback`
+        """Wrap a file-like object to report read/write progress.
+
+        Args:
+            callback (Callable): Callback function to report progress
+            stream (IO[bytes]): File-like stream to wrap
         """
         self.callback = callback
         self.stream = stream
 
     def write(self, data, *args, **kwargs):
+        """Write data and report progress.
+
+        Args:
+            data: Data to write
+            *args: Additional positional arguments for stream.write
+            **kwargs: Additional keyword arguments for stream.write
+
+        Returns:
+            Any: Result from stream.write
+        """
         res = self.stream.write(data, *args, **kwargs)
         self.callback(advance=len(data))
         return res
 
     def read(self, *args, **kwargs):
+        """Read data and report progress.
+
+        Args:
+            *args: Positional arguments for stream.read
+            **kwargs: Keyword arguments for stream.read
+
+        Returns:
+            Any: Data read from stream
+        """
         data = self.stream.read(*args, **kwargs)
         self.callback(advance=len(data))
         return data
@@ -76,19 +106,21 @@ def extract_zip(
     """Extract zip file and return path to extracted directory.
 
     Args:
-        zip_path: Path to zip file
-        extract_to: Directory to extract to
-        expected_dir: Expected directory name (e.g., "{zip_stem}.SEN3")
+        zip_path (Path): Path to zip file
+        extract_to (Path): Directory to extract to
+        item_id (str): Identifier for progress tracking
+        expected_dir (str | None): Expected directory name. Defaults to None.
 
     Returns:
-        Path to extracted directory or None if failed
+        Path: Path to extracted directory
+
+    Raises:
+        ValueError: If expected directory not found after extraction
     """
     task_id = f"extract_{item_id}"
 
     emit_event(ProgressEventType.TASK_CREATED, task_id=task_id, description="extract")
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        # zip_ref.extractall(extract_to)
-
         total_size = sum(f.file_size for f in zip_ref.infolist() if not f.is_dir())
         emit_event(ProgressEventType.TASK_DURATION, task_id=task_id, duration=total_size)
 
@@ -110,7 +142,9 @@ def extract_zip(
     if expected_dir:
         extracted_dir = extract_to / expected_dir
         if not extracted_dir.exists():
-            raise ValueError(f"Expected directory {expected_dir} not found")
+            raise ValueError(
+                f"Invalid archive structure: expected directory '{expected_dir}' not found after extraction"
+            )
         emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
         return extracted_dir
     else:

@@ -1,3 +1,17 @@
+"""Data source implementations for different satellite missions.
+
+This package provides source implementations for various satellite missions:
+- Sentinel2L1CSource, Sentinel2L2ASource: Copernicus Sentinel-2 MSI data
+- OLCISource, SLSTRSource: Copernicus Sentinel-3 OLCI and SLSTR data
+- VIIRSL1BSource: NASA/NOAA VIIRS Level 1B data
+- MODISL1BSource: NASA MODIS Level 1B data
+- MTGSource: EUMETSAT Meteosat Third Generation data
+
+All sources implement the DataSource interface and provide unified search,
+download, and processing capabilities. Sources are configured via the registry
+system and can be created using the create_source() factory function.
+"""
+
 from typing import Any
 
 from satctl.auth import registry as auth_registry
@@ -5,6 +19,7 @@ from satctl.config import get_settings
 from satctl.downloaders import registry as dwl_registry
 from satctl.registry import Registry
 from satctl.sources.base import DataSource
+from satctl.sources.earthdata import EarthDataSource
 from satctl.sources.modis import MODISL1BSource
 from satctl.sources.mtg import MTGSource
 from satctl.sources.sentinel2 import Sentinel2L1CSource, Sentinel2L2ASource
@@ -14,11 +29,11 @@ from satctl.sources.viirs import VIIRSL1BSource
 registry = Registry[DataSource](name="source")
 registry.register("slstr", SLSTRSource)
 registry.register("olci", OLCISource)
-registry.register("viirs-l1b", VIIRSL1BSource)
-registry.register("mtg", MTGSource)
-registry.register("modis-l1b", MODISL1BSource)
 registry.register("s2l2a", Sentinel2L2ASource)
 registry.register("s2l1c", Sentinel2L1CSource)
+registry.register("mtg", MTGSource)
+registry.register("viirs-l1b", VIIRSL1BSource)
+registry.register("modis-l1b", MODISL1BSource)
 
 
 def create_source(
@@ -60,4 +75,15 @@ def create_source(
     )
 
 
-__all__ = ["OLCISource", "SLSTRSource", "Sentinel2L2ASource", "Sentinel2L1CSource", "MTGSource", "create_source"]
+__all__ = [
+    "DataSource",
+    "EarthDataSource",
+    "OLCISource",
+    "SLSTRSource",
+    "Sentinel2L2ASource",
+    "Sentinel2L1CSource",
+    "MTGSource",
+    "VIIRSL1BSource",
+    "MODISL1BSource",
+    "create_source",
+]
