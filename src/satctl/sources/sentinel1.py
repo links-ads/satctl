@@ -31,14 +31,19 @@ class Sentinel1Source(DataSource):
     # Static class variables for required assets
     REQUIRED_ASSETS: set[str] = {
         "vv",
-        "vh"
+        "vh",
+        "schema-noise-vv",
+        "schema-noise-vh",
+        "schema-product-vv",
+        "schema-product-vh",
+        "schema-calibration-vv",
+        "schema-calibration-vh",
     }
 
     # Static class variables for metadata assets
     METADATA_ASSETS: set[str] = {
         "safe_manifest",
-        "granule_metadata",
-        "product_metadata",
+        "thumbnail",
     }
 
     def __init__(
@@ -101,10 +106,9 @@ class Sentinel1Source(DataSource):
         if item.local_path is None:
             raise ValueError("Local path is missing. Did you download this granule?")
         # Check if SAFE structure exists
-        granule_dir = item.local_path / "GRANULE"
         manifest_file = item.local_path / "manifest.safe"
 
-        if granule_dir.exists() and manifest_file.exists():
+        if manifest_file.exists():
             # SAFE structure detected - return all files recursively
             # Filter out directories and non-data files
             all_files = [f for f in item.local_path.rglob("*") if f.is_file()]
@@ -192,7 +196,7 @@ class Sentinel1Source(DataSource):
 
             # Extract the relative path from S3 URI to preserve SAFE structure
             href_parts = asset.href.split(".SAFE/")
-            if len(href_parts) > 1 and "GRANULE" in href_parts[1]:
+            if len(href_parts) > 1 and ("measurement" in href_parts[1] or "annotation" in href_parts[1]):
                 # Preserve the SAFE structure for proper sar-c_safe reader support
                 relative_path = href_parts[1] 
                 target_file = local_path / relative_path
