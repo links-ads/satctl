@@ -2,7 +2,7 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, cast
 
@@ -187,7 +187,7 @@ class DataSource(ABC):
         self.downloader.init(**self.get_downloader_init_kwargs())
         executor = None
         try:
-            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 future_to_item_map = {executor.submit(self.download_item, item, destination): item for item in items}
                 for future in as_completed(future_to_item_map):
                     item = future_to_item_map[future]

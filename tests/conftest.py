@@ -1,20 +1,28 @@
 """Pytest configuration and fixtures for integration tests."""
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
 
+# Load .env file BEFORE any imports that might use satpy
+# This must happen at module import time, not in a fixture, because satpy
+# reads SATPY_CONFIG_PATH when it's first imported (during test collection)
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
 
-@pytest.fixture(scope="session", autouse=True)
-def load_env():
-    """Load environment variables from .env file at test session start."""
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-    else:
-        pytest.skip(f".env file not found at {env_path}")
+    # Convert SATPY_CONFIG_PATH to absolute path if it's relative
+    # This ensures satpy can find the custom composites regardless of working directory
+    satpy_config = os.getenv("SATPY_CONFIG_PATH")
+    if satpy_config and not Path(satpy_config).is_absolute():
+        abs_path = (Path(__file__).parent.parent / satpy_config).resolve()
+        os.environ["SATPY_CONFIG_PATH"] = str(abs_path)
+        print(f"Set SATPY_CONFIG_PATH to: {abs_path}")
+else:
+    print(f"Warning: .env file not found at {env_path}")
 
 
 @pytest.fixture(scope="session")
@@ -117,9 +125,6 @@ def eumetsat_authenticator(eumetsat_credentials):
     )
 
 
-# Downloader Fixtures
-
-
 @pytest.fixture
 def temp_download_dir(tmp_path):
     """Provide a temporary directory for downloads."""
@@ -129,44 +134,34 @@ def temp_download_dir(tmp_path):
 
 
 @pytest.fixture
-def http_downloader(odata_authenticator):
-    """Create an HTTPDownloader instance."""
-    from satctl.downloaders import HTTPDownloader
+def test_search_params():
+    """Provide SearchParams for integration tests.
 
-    downloader = HTTPDownloader(
-        authenticator=odata_authenticator,
-        max_retries=3,
-        chunk_size=8192,
-        timeout=30,
+    Returns:
+        SearchParams: Search parameters configured for testing
+    """
+    from satctl.model import SearchParams
+
+    return SearchParams.from_file(
+        # TODO put a known geojson somewhere, maybe convert to fixture
+        path=Path("data/EMSR760.json"),
+        # TODO ensure dates with satellite coverage for test_area_path
+        start=datetime.strptime("2025-09-01", "%Y-%m-%d"),
+        end=datetime.strptime("2025-09-04", "%Y-%m-%d"),
     )
-    downloader.init()
-    yield downloader
-    downloader.close()
 
 
 @pytest.fixture
-def s3_downloader(s3_authenticator):
-    """Create an S3Downloader instance."""
-    from satctl.downloaders import S3Downloader
+def test_conversion_params():
+    """Provide ConversionParams for integration tests.
 
-    downloader = S3Downloader(
-        authenticator=s3_authenticator,
-        max_retries=3,
-        chunk_size=8192,
-        endpoint_url="https://eodata.dataspace.copernicus.eu",
+    Returns:
+        ConversionParams: Conversion parameters configured for testing
+    """
+    from satctl.model import ConversionParams
+
+    return ConversionParams.from_file(
+        # TODO put a known geojson somewhere, maybe convert to fixture
+        path=Path("data/EMSR760.json"),
+        target_crs="EPSG:4326",
     )
-    downloader.init()
-    yield downloader
-    downloader.close()
-
-
-@pytest.fixture(scope="session")
-def test_urls():
-    """Provide known test URLs for download testing."""
-    return {
-        # Small public STAC catalog endpoint (JSON, few KB)
-        "stac_catalog": "https://stac.dataspace.copernicus.eu/v1/collections",
-        # Note: S3 URIs require searching for actual files first
-        # These would need to be discovered dynamically or hardcoded from known data
-        "s3_uri": None,  # To be filled with actual S3 URI if available
-    }
