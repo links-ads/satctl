@@ -57,11 +57,11 @@ def parse_umm_assets(umm_result: dict, asset_class: type[BaseModel] = EarthDataA
     """Parse assets from UMM search result into asset objects.
 
     Args:
-        umm_result: UMM format result from earthaccess search
-        asset_class: Asset model class (defaults to EarthDataAsset)
+        umm_result (dict): UMM format result from earthaccess search
+        asset_class (type[BaseModel]): Asset model class. Defaults to EarthDataAsset.
 
     Returns:
-        Dictionary mapping asset keys (http, s3, html, doi) to Asset objects
+        dict[str, BaseModel]: Dictionary mapping asset keys (http, s3, html, doi) to Asset objects
     """
     return {
         EARTHDATA_ASSET_KEY_MAPPING.get(str(k), "unknown"): asset_class(
@@ -95,6 +95,18 @@ class EarthDataSource(DataSource):
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize EarthData source.
+
+        Args:
+            collection_name (str): Collection name identifier
+            reader (str): Satpy reader name
+            downloader (Downloader): Downloader instance
+            short_name (str): NASA short name for the product
+            version (str | None): Product version. Defaults to None.
+            default_composite (str | None): Default composite name. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum search results per query. Defaults to 100.
+        """
         super().__init__(
             collection_name,
             downloader=downloader,
@@ -112,10 +124,10 @@ class EarthDataSource(DataSource):
         """Parse a granule ID into its components.
 
         Args:
-            granule_id: Granule identifier
+            granule_id (str): Granule identifier
 
         Returns:
-            ParsedGranuleId with individual components
+            ParsedGranuleId: ParsedGranuleId with individual components
 
         Raises:
             ValueError: If granule ID format is invalid
@@ -127,10 +139,10 @@ class EarthDataSource(DataSource):
         """Parse item name into ProductInfo.
 
         Args:
-            name: Item name to parse
+            name (str): Item name to parse
 
         Returns:
-            ProductInfo with extracted metadata
+            ProductInfo: ProductInfo with extracted metadata
         """
         ...
 
@@ -139,10 +151,10 @@ class EarthDataSource(DataSource):
         """Get list of files for a granule.
 
         Args:
-            item: Granule with local_path set
+            item (Granule): Granule with local_path set
 
         Returns:
-            List of file paths
+            list[Path | str]: List of file paths
 
         Raises:
             ValueError: If local_path is not set
@@ -154,10 +166,10 @@ class EarthDataSource(DataSource):
         """Extract day/night flag from file metadata.
 
         Args:
-            files: List of file paths to process
+            files (list[Path | str]): List of file paths to process
 
         Returns:
-            Day/night flag as lowercase string (e.g., "day", "night")
+            str: Day/night flag as lowercase string (e.g., "day", "night")
         """
         ...
 
@@ -166,12 +178,12 @@ class EarthDataSource(DataSource):
         """Select appropriate dataset automatically based on sensor and conditions.
 
         Args:
-            granule_id: Granule identifier
-            day_night_flag: Day/night condition flag
-            writer: Writer instance for parsing datasets
+            granule_id (str): Granule identifier
+            day_night_flag (str): Day/night condition flag
+            writer (Writer): Writer instance for parsing datasets
 
         Returns:
-            Dictionary of selected dataset
+            dict[str, str]: Dictionary of selected dataset
 
         Raises:
             ValueError: If automatic selection cannot be performed
@@ -187,10 +199,10 @@ class EarthDataSource(DataSource):
         - VIIRS: keeps product type (VNP02MOD -> VNP03MOD)
 
         Args:
-            radiance_short_name: Level 02 product short name (e.g., "MOD02QKM", "VNP02MOD")
+            radiance_short_name (str): Level 02 product short name (e.g., "MOD02QKM", "VNP02MOD")
 
         Returns:
-            Level 03 product short name (e.g., "MOD03", "VNP03MOD")
+            str: Level 03 product short name (e.g., "MOD03", "VNP03MOD")
         """
         ...
 
@@ -203,10 +215,10 @@ class EarthDataSource(DataSource):
         - VIIRS: keeps product type (VNP02MOD.A2025227.1354.002.XXX -> VNP03MOD.A2025227.1354.002.*)
 
         Args:
-            radiance_id: Radiance granule ID (e.g., "MOD02QKM.A2025227.1354.061.2025227231707")
+            radiance_id (str): Radiance granule ID (e.g., "MOD02QKM.A2025227.1354.061.2025227231707")
 
         Returns:
-            Georeference granule ID pattern with wildcard timestamp
+            str: Georeference granule ID pattern with wildcard timestamp
         """
         ...
 
@@ -214,10 +226,10 @@ class EarthDataSource(DataSource):
         """Extract the short_name from a granule ID.
 
         Args:
-            granule_id: Full granule ID
+            granule_id (str): Full granule ID
 
         Returns:
-            Short name (e.g., "MOD02QKM", "VNP02MOD")
+            str: Short name (e.g., "MOD02QKM", "VNP02MOD")
 
         Example:
             "MOD02QKM.A2025227.1354.061.2025227231707" -> "MOD02QKM"
@@ -235,12 +247,12 @@ class EarthDataSource(DataSource):
         """Search for granules for a single product combination.
 
         Args:
-            short_name: NASA short name (e.g., "MOD02QKM", "VNP02MOD")
-            version: Product version (e.g., "6.1", "2")
-            params: Search parameters including time range and optional spatial filter
+            short_name (str): NASA short name (e.g., "MOD02QKM", "VNP02MOD")
+            version (str | None): Product version (e.g., "6.1", "2")
+            params (SearchParams): Search parameters including time range and optional spatial filter
 
         Returns:
-            List of granules for this combination
+            list[Granule]: List of granules for this combination
         """
         search_kwargs: dict[str, Any] = {
             "short_name": short_name,
@@ -293,11 +305,11 @@ class EarthDataSource(DataSource):
         """Fetch a specific granule by ID and short_name.
 
         Args:
-            item_id: The granule ID
-            short_name: NASA short name (e.g., "MOD02QKM", "VNP02MOD")
+            item_id (str): The granule ID
+            short_name (str): NASA short name (e.g., "MOD02QKM", "VNP02MOD")
 
         Returns:
-            The requested granule
+            Granule: The requested granule
 
         Raises:
             ValueError: If granule not found
@@ -326,8 +338,12 @@ class EarthDataSource(DataSource):
             info=self._parse_item_name(item_id),
         )
 
-    def get_downloader_init_kwargs(self) -> dict:
-        """Provide EarthData session to downloader initialization."""
+    def get_downloader_init_kwargs(self) -> dict[str, Any]:
+        """Provide EarthData session to downloader initialization.
+
+        Returns:
+            dict[str, Any]: Dictionary with session keyword argument if applicable
+        """
         # Only provide session if we have HTTPDownloader with EarthDataAuthenticator
         if isinstance(self.downloader, HTTPDownloader) and isinstance(self.downloader.auth, EarthDataAuthenticator):
             return {"session": self.downloader.auth.auth_session}
@@ -337,11 +353,11 @@ class EarthDataSource(DataSource):
         """Download both radiance and georeference files for a granule.
 
         Args:
-            item: Granule to download
-            destination: Base destination directory
+            item (Granule): Granule to download
+            destination (Path): Base destination directory
 
         Returns:
-            True if both components downloaded successfully, False otherwise
+            bool: True if both components downloaded successfully, False otherwise
         """
         granule_dir = destination / item.granule_id
         granule_dir.mkdir(parents=True, exist_ok=True)
@@ -391,12 +407,12 @@ class EarthDataSource(DataSource):
         """Filter datasets that don't match the day/night condition.
 
         Args:
-            datasets_dict: Dictionary of dataset names to file names
-            day_night_flag: Day/night condition flag
-            granule_id: Granule identifier for logging
+            datasets_dict (dict[str, str]): Dictionary of dataset names to file names
+            day_night_flag (str): Day/night condition flag
+            granule_id (str): Granule identifier for logging
 
         Returns:
-            Filtered dictionary with only compatible datasets
+            dict[str, str]: Filtered dictionary with only compatible datasets
         """
         if day_night_flag not in DAY_NIGHT_CONDITIONS:
             return datasets_dict
@@ -422,14 +438,14 @@ class EarthDataSource(DataSource):
         """Save granule item to output files after processing.
 
         Args:
-            item: Granule to process
-            destination: Base destination directory
-            writer: Writer instance for output
-            params: Conversion parameters
-            force: If True, overwrite existing files
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
         # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
@@ -491,7 +507,7 @@ class EarthDataSource(DataSource):
         """Validate a granule.
 
         Args:
-            item: Granule to validate
+            item (Granule): Granule to validate
 
         Raises:
             NotImplementedError: Validation not yet implemented

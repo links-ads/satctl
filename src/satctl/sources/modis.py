@@ -57,6 +57,18 @@ class MODISSource(EarthDataSource):
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize MODIS data source.
+
+        Args:
+            collection_name (str): Name of the MODIS collection
+            reader (str): Satpy reader name for this product type
+            downloader (Downloader): Downloader instance for file retrieval
+            short_name (str): NASA CMR short name for the dataset
+            version (str | None): Dataset version. Defaults to None.
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+        """
         super().__init__(
             collection_name,
             reader=reader,
@@ -266,6 +278,14 @@ class MODISL1BSource(MODISSource):
         resolution: list[Literal["qkm", "hkm", "1km"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize MODIS Level 1B data source.
+
+        Args:
+            downloader (Downloader): Downloader instance for file retrieval
+            platform (list[Literal["mod", "myd"]]): List of satellite platforms to search
+            resolution (list[Literal["qkm", "hkm", "1km"]]): List of resolutions to search
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+        """
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []
         for plat, res in product(platform, resolution):
@@ -328,6 +348,20 @@ class MODISL1BSource(MODISSource):
         return all_items
 
     def get_by_id(self, item_id: str, **_kwargs) -> Granule:
+        """Get specific MODIS granule by ID.
+
+        Automatically detects the short_name from the granule ID format.
+
+        Args:
+            item_id (str): Granule identifier (e.g., "MOD02QKM.A2025227.1354.061.2025227231707")
+            **_kwargs: Additional keyword arguments (unused)
+
+        Returns:
+            Granule: Requested granule with metadata
+
+        Raises:
+            ValueError: If granule ID format is invalid or not in configured combinations
+        """
         # Parse the granule_id to determine which combination it belongs to
         try:
             parsed = self._parse_granule_id(item_id)

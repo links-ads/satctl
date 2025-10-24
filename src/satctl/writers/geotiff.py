@@ -25,6 +25,14 @@ class GeoTIFFWriter(Writer):
         dtype: Any | None = None,
         fill_value: Any = None,
     ):
+        """Initialize GeoTIFF writer.
+
+        Args:
+            compress (str): Compression method. Defaults to 'lzw'.
+            tiled (bool): Whether to create tiled GeoTIFF. Defaults to True.
+            dtype (Any | None): Output data type. Defaults to None (use source dtype).
+            fill_value (Any): No-data fill value. Defaults to None (auto-determined).
+        """
         super().__init__(extension="tif")
         self.compress = compress
         self.tiled = tiled
@@ -32,6 +40,14 @@ class GeoTIFFWriter(Writer):
         self.fill_value = fill_value
 
     def _get_transform_gcps(self, data_arr: DataArray) -> tuple[CRS | None, Affine | None, Any]:
+        """Extract CRS, transform, and GCPs from DataArray.
+
+        Args:
+            data_arr (DataArray): Input data array with area attribute
+
+        Returns:
+            tuple[CRS | None, Affine | None, Any]: Tuple of (CRS, transform, GCPs)
+        """
         crs = None
         transform = None
         gcps = None
@@ -73,7 +89,21 @@ class GeoTIFFWriter(Writer):
         crs: CRS | None,
         transform: Affine | None,
         fill_value: Any = None,
-    ):
+    ) -> dict[str, Any]:
+        """Create rasterio profile dictionary.
+
+        Args:
+            height (int): Image height in pixels
+            width (int): Image width in pixels
+            bands (int): Number of bands
+            dtype (Any): Data type
+            crs (CRS | None): Coordinate reference system
+            transform (Affine | None): Affine transform
+            fill_value (Any): No-data value. Defaults to None.
+
+        Returns:
+            dict[str, Any]: Rasterio profile dictionary
+        """
         return {
             "driver": "GTiff",
             "height": height,
@@ -91,10 +121,21 @@ class GeoTIFFWriter(Writer):
         self,
         dataset: DataArray,
         output_path: Path,
-        **tags,
-    ) -> None:
-        """
-        Write scene composite to GeoTIFF.
+        **tags: Any,
+    ) -> Path:
+        """Write DataArray to GeoTIFF file.
+
+        Args:
+            dataset (DataArray): Data array to write
+            output_path (Path): Output file path
+            **tags (Any): Additional metadata tags to write
+
+        Returns:
+            Path: Output file path
+
+        Raises:
+            FileNotFoundError: If output parent directory doesn't exist or is invalid
+            ValueError: If data dimensions are unsupported
         """
         if not output_path.parent.exists() or output_path.is_dir():
             raise FileNotFoundError(
@@ -154,3 +195,4 @@ class GeoTIFFWriter(Writer):
             dst.update_tags(**tags)
 
         log.debug("Successfully saved: %s", output_path)
+        return output_path

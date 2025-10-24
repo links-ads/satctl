@@ -15,7 +15,7 @@ class Authenticator(ABC):
         """Perform initial authentication with the provider.
 
         Returns:
-            True if authentication succeeded, False otherwise
+            bool: True if authentication succeeded, False otherwise
         """
         ...
 
@@ -24,10 +24,10 @@ class Authenticator(ABC):
         """Ensure valid authentication, optionally refreshing credentials.
 
         Args:
-            refresh: If True, force refresh of credentials even if still valid
+            refresh (bool): If True, force refresh of credentials. Defaults to False.
 
         Returns:
-            True if authenticated (or refresh succeeded), False otherwise
+            bool: True if authenticated (or refresh succeeded), False otherwise
         """
         ...
 
@@ -47,6 +47,6 @@ class Authenticator(ABC):
         """Get an authenticated session object.
 
         Returns:
-            Provider-specific authenticated session (requests.Session, boto3 client, etc.)
+            Any: Provider-specific authenticated session (requests.Session, boto3 client, etc.)
         """
         ...

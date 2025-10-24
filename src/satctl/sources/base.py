@@ -21,9 +21,7 @@ log = logging.getLogger(__name__)
 
 
 class DataSource(ABC):
-    """
-    Abstract base class for all satellite data sources.
-    """
+    """Abstract base class for all satellite data sources."""
 
     def __init__(
         self,
@@ -32,6 +30,14 @@ class DataSource(ABC):
         default_resolution: int | None = None,
         default_composite: str | None = None,
     ):
+        """Initialize data source.
+
+        Args:
+            name (str): Source name identifier
+            downloader (Downloader): Downloader instance for retrieving files
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            default_composite (str | None): Default composite/dataset to load. Defaults to None.
+        """
         self.source_name = name
         self.downloader = downloader
         self.default_composite = default_composite
@@ -40,26 +46,78 @@ class DataSource(ABC):
 
     @property
     def collections(self) -> list[str]:
+        """Get list of collection identifiers.
+
+        Returns:
+            list[str]: List containing the source name
+        """
         return [self.source_name]
 
     @abstractmethod
-    def search(self, params: SearchParams) -> list[Granule]: ...
+    def search(self, params: SearchParams) -> list[Granule]:
+        """Search for granules matching search parameters.
+
+        Args:
+            params (SearchParams): Search parameters including time range and area
+
+        Returns:
+            list[Granule]: List of matching granules
+        """
+        ...
 
     @abstractmethod
-    def get_by_id(self, item_id: str, **kwargs) -> Granule: ...
+    def get_by_id(self, item_id: str, **kwargs: Any) -> Granule:
+        """Retrieve a specific granule by its identifier.
+
+        Args:
+            item_id (str): Granule identifier
+            **kwargs (Any): Additional keyword arguments
+
+        Returns:
+            Granule: The requested granule
+        """
+        ...
 
     @abstractmethod
-    def get_files(self, item: Granule) -> list[Path | str]: ...
+    def get_files(self, item: Granule) -> list[Path | str]:
+        """Get list of files for a granule.
+
+        Args:
+            item (Granule): Granule to get files for
+
+        Returns:
+            list[Path | str]: List of file paths
+        """
+        ...
 
     @abstractmethod
-    def validate(self, item: Granule) -> None: ...
+    def validate(self, item: Granule) -> None:
+        """Validate a granule's structure and assets.
+
+        Args:
+            item (Granule): Granule to validate
+
+        Raises:
+            ValidationError: If granule is invalid
+        """
+        ...
 
     @abstractmethod
     def download_item(
         self,
         item: Granule,
         destination: Path,
-    ) -> bool: ...
+    ) -> bool:
+        """Download a single granule.
+
+        Args:
+            item (Granule): Granule to download
+            destination (Path): Base destination directory
+
+        Returns:
+            bool: True if download succeeded, False otherwise
+        """
+        ...
 
     @abstractmethod
     def save_item(
@@ -69,15 +127,28 @@ class DataSource(ABC):
         writer: Writer,
         params: ConversionParams,
         force: bool = False,
-    ) -> dict[str, list]: ...
+    ) -> dict[str, list]:
+        """Save granule item to output files after processing.
 
-    def get_downloader_init_kwargs(self) -> dict:
+        Args:
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
+
+        Returns:
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
+        """
+        ...
+
+    def get_downloader_init_kwargs(self) -> dict[str, Any]:
         """Hook method for subclasses to provide downloader initialization arguments.
 
         Override this method in subclasses to pass custom arguments to downloader.init().
 
         Returns:
-            dict: Keyword arguments to pass to downloader.init()
+            dict[str, Any]: Keyword arguments to pass to downloader.init()
         """
         return {}
 
@@ -87,6 +158,16 @@ class DataSource(ABC):
         destination: Path,
         num_workers: int | None = None,
     ) -> tuple[list, list]:
+        """Download one or more granules with parallel processing.
+
+        Args:
+            items (Granule | list[Granule]): Single granule or list of granules to download
+            destination (Path): Base destination directory
+            num_workers (int | None): Number of parallel workers. Defaults to 1.
+
+        Returns:
+            tuple[list, list]: Tuple of (successful_items, failed_items)
+        """
         # check output folder exists, make sure items is iterable
         destination.mkdir(parents=True, exist_ok=True)
         if not isinstance(items, Iterable):
@@ -143,8 +224,22 @@ class DataSource(ABC):
         item: Granule,
         datasets: list[str] | None = None,
         generate: bool = False,
-        **scene_options: dict[str, Any],
+        **scene_options: Any,
     ) -> Scene:
+        """Load a satpy Scene from granule files.
+
+        Args:
+            item (Granule): Granule to load
+            datasets (list[str] | None): List of datasets/composites to load. Defaults to None (uses default_composite).
+            generate (bool): Whether to generate composites. Defaults to False.
+            **scene_options (Any): Additional keyword arguments passed to Scene reader
+
+        Returns:
+            Scene: Loaded satpy Scene object
+
+        Raises:
+            ValueError: If datasets is None and no default_composite is set
+        """
         if not datasets:
             if self.default_composite is None:
                 raise ValueError(
@@ -165,8 +260,20 @@ class DataSource(ABC):
         area_def: AreaDefinition | None = None,
         datasets: list[str] | None = None,
         resolution: int | None = None,
-        **resample_options,
+        **resample_options: Any,
     ) -> Scene:
+        """Resample a Scene to a target area definition.
+
+        Args:
+            scene (Scene): Scene to resample
+            area_def (AreaDefinition | None): Target area definition. Defaults to None (auto-generated).
+            datasets (list[str] | None): Specific datasets to resample. Defaults to None (all datasets).
+            resolution (int | None): Resolution in meters. Defaults to None (uses default_resolution).
+            **resample_options (Any): Additional keyword arguments passed to scene.resample()
+
+        Returns:
+            Scene: Resampled scene
+        """
         resolution = resolution or self.default_resolution
         area_def = area_def or self.define_area(
             target_crs=CRS.from_epsg(4326),
@@ -177,8 +284,13 @@ class DataSource(ABC):
         return scene.resample(destination=area_def, datasets=datasets, **resample_options)
 
     def get_finest_resolution(self, scene: Scene) -> int:
-        """
-        Scan all datasets and return smallest resolution.
+        """Scan all datasets and return smallest resolution.
+
+        Args:
+            scene (Scene): Scene to analyze
+
+        Returns:
+            int: Finest (minimum) resolution in meters across all datasets
         """
         resolutions = [ds.attrs.get("resolution") for ds in scene.values()]
         resolutions = [r for r in resolutions if r is not None]
@@ -201,16 +313,19 @@ class DataSource(ABC):
         scene extent at finest available resolution.
 
         Args:
-            area(Polygon, optional): Optional polygon defining custom extents
-            scene (Scene, optional): Optional scene to extract extent from
+            area (Polygon | None): Optional polygon defining custom extents. Defaults to None.
+            scene (Scene | None): Optional scene to extract extent from. Defaults to None.
             target_crs (CRS): Target coordinate reference system
-            source_crs (CRS, optional): Source CRS (defaults to EPSG:4326)
-            resolution (int, optional): Resolution in CRS units (defaults to finest available)
-            name (str, optional): Area name
-            description (str, optional): Area description
+            source_crs (CRS | None): Source CRS. Defaults to None (EPSG:4326).
+            resolution (int | None): Resolution in meters. Defaults to None (finest available).
+            name (str | None): Area name. Defaults to None.
+            description (str | None): Area description. Defaults to None.
 
         Returns:
-            AreaDefinition: area required for resampling
+            AreaDefinition: Area definition configured for resampling
+
+        Raises:
+            ValueError: If both area and scene are None or resolution cannot be determined
         """
         if area:
             bounds = area.bounds
@@ -293,6 +408,19 @@ class DataSource(ABC):
         num_workers: int | None = None,
         force: bool = False,
     ) -> tuple[list, list]:
+        """Process and save one or more granules with parallel processing.
+
+        Args:
+            items (Granule | list[Granule]): Single granule or list of granules to process
+            params (ConversionParams): Conversion parameters
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            num_workers (int | None): Number of parallel workers. Defaults to 1.
+            force (bool): If True, overwrite existing files. Defaults to False.
+
+        Returns:
+            tuple[list, list]: Tuple of (successful_items, failed_items)
+        """
         if not isinstance(items, Iterable):
             items = [items]
         items = cast(list, items)
@@ -356,8 +484,8 @@ class DataSource(ABC):
         """Validate inputs for save_item operation.
 
         Args:
-            item: Granule to process
-            params: Conversion parameters
+            item (Granule): Granule to process
+            params (ConversionParams): Conversion parameters
 
         Raises:
             FileNotFoundError: If item.local_path is None or doesn't exist
@@ -375,11 +503,11 @@ class DataSource(ABC):
         """Parse and prepare datasets dictionary from params or defaults.
 
         Args:
-            writer: Writer instance for parsing datasets
-            params: Conversion parameters
+            writer (Writer): Writer instance for parsing datasets
+            params (ConversionParams): Conversion parameters
 
         Returns:
-            Dictionary mapping dataset names to file names
+            dict[str, str]: Dictionary mapping dataset names to file names
         """
         datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
         log.debug("Attempting to save the following datasets: %s", datasets_dict)
@@ -396,14 +524,14 @@ class DataSource(ABC):
         """Remove datasets that already exist unless force=True.
 
         Args:
-            datasets_dict: Dictionary of dataset names to file names
-            destination: Base destination directory
-            granule_id: Granule identifier for subdirectory
-            writer: Writer instance for file extension
-            force: If True, don't filter existing files
+            datasets_dict (dict[str, str]): Dictionary of dataset names to file names
+            destination (Path): Base destination directory
+            granule_id (str): Granule identifier for subdirectory
+            writer (Writer): Writer instance for file extension
+            force (bool): If True, don't filter existing files
 
         Returns:
-            Filtered dictionary of datasets to process
+            dict[str, str]: Filtered dictionary of datasets to process
         """
         if force:
             return datasets_dict
@@ -423,11 +551,11 @@ class DataSource(ABC):
         """Create area definition from conversion params, using scene extent if no geometry.
 
         Args:
-            params: Conversion parameters with CRS and optional geometry
-            scene: Optional scene for extracting extent when no geometry provided
+            params (ConversionParams): Conversion parameters with CRS and optional geometry
+            scene (Scene | None): Optional scene for extracting extent when no geometry provided. Defaults to None.
 
         Returns:
-            AreaDefinition for resampling
+            AreaDefinition: AreaDefinition for resampling
 
         Raises:
             ValueError: If scene is None when area_geometry is also None
@@ -462,14 +590,14 @@ class DataSource(ABC):
         """Write all datasets from scene to output files.
 
         Args:
-            scene: Scene containing loaded datasets
-            datasets_dict: Dictionary mapping dataset names to file names
-            destination: Base destination directory
-            granule_id: Granule identifier for subdirectory
-            writer: Writer instance for output
+            scene (Scene): Scene containing loaded datasets
+            datasets_dict (dict[str, str]): Dictionary mapping dataset names to file names
+            destination (Path): Base destination directory
+            granule_id (str): Granule identifier for subdirectory
+            writer (Writer): Writer instance for output
 
         Returns:
-            Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
         from collections import defaultdict
 

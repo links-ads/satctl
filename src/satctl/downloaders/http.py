@@ -31,6 +31,16 @@ class HTTPDownloader(Downloader):
         pool_connections: int = DEFAULT_POOL_CONNECTIONS,
         pool_maxsize: int = DEFAULT_POOL_MAX_SIZE,
     ):
+        """Initialize HTTP downloader.
+
+        Args:
+            authenticator (Authenticator): Authenticator instance
+            max_retries (int): Maximum download retry attempts. Defaults to 3.
+            chunk_size (int): Download chunk size in bytes. Defaults to 8192.
+            timeout (int): Request timeout in seconds. Defaults to 30.
+            pool_connections (int): Connection pool size. Defaults to 10.
+            pool_maxsize (int): Maximum pool size. Defaults to 2.
+        """
         super().__init__(authenticator)
         self.max_retries = max_retries
         self.chunk_size = chunk_size
@@ -38,7 +48,13 @@ class HTTPDownloader(Downloader):
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
 
-    def init(self, session: requests.Session | None = None, **kwargs) -> None:
+    def init(self, session: requests.Session | None = None, **kwargs: requests.Session) -> None:
+        """Initialize HTTP session.
+
+        Args:
+            session (requests.Session | None): Optional pre-configured session. Defaults to None.
+            **kwargs (requests.Session): Additional keyword arguments (unused)
+        """
         if not session:
             session = requests.Session()
             adapter = HTTPAdapter(pool_connections=self.pool_conns, pool_maxsize=self.pool_size)
@@ -52,8 +68,15 @@ class HTTPDownloader(Downloader):
         destination: Path,
         item_id: str,
     ) -> bool:
-        """
-        Download file from HTTP URL with retries and progress reporting.
+        """Download file from HTTP URL with retries and progress reporting.
+
+        Args:
+            uri (str): HTTP URL to download from
+            destination (Path): Local file path to save to
+            item_id (str): Identifier used for progress tracking events
+
+        Returns:
+            bool: True if download succeeded, False otherwise
         """
         error = ""
         task_id = f"download_{item_id}"
@@ -115,5 +138,6 @@ class HTTPDownloader(Downloader):
         return False
 
     def close(self) -> None:
+        """Close HTTP session and release resources."""
         if self.session:
             self.session.close()

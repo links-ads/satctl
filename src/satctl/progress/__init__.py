@@ -31,5 +31,14 @@ __all__ = [
 
 
 def create_reporter(reporter_name: str, **kwargs: dict[str, Any]) -> ProgressReporter | None:
+    """Create a progress reporter instance.
+
+    Args:
+        reporter_name (str): Name of the registered reporter
+        **kwargs (dict[str, Any]): Configuration options for the reporter
+
+    Returns:
+        ProgressReporter | None: Reporter instance or None
+    """
     config = kwargs or {}
     return registry.create(reporter_name, **config)

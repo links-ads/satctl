@@ -40,6 +40,18 @@ class MTGSource(DataSource):
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize MTG data source.
+
+        Args:
+            collection_name (str): Name of the MTG collection
+            reader (str): Satpy reader name for this product type
+            downloader (Downloader): Downloader instance for file retrieval
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            download_pool_conns (int): Number of download pool connections. Defaults to 10.
+            download_pool_size (int): Size of download pool. Defaults to 2.
+        """
         super().__init__(
             collection_name,
             downloader=downloader,
@@ -53,6 +65,17 @@ class MTGSource(DataSource):
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse MTG item name into product information.
+
+        Args:
+            name (str): MTG item identifier
+
+        Returns:
+            ProductInfo: Parsed product metadata
+
+        Raises:
+            ValueError: If name format is invalid
+        """
         pattern = r"S3([AB])_OL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
@@ -70,6 +93,14 @@ class MTGSource(DataSource):
         )
 
     def search(self, params: SearchParams) -> list[Granule]:
+        """Search for MTG data using EUMETSAT DataStore.
+
+        Args:
+            params (SearchParams): Search parameters including time range
+
+        Returns:
+            list[Granule]: List of matching granules with metadata and assets
+        """
         log.debug("Setting up the DataStore client")
         catalogue = DataStore(self.downloader.auth.auth_session)
 
@@ -99,9 +130,31 @@ class MTGSource(DataSource):
         return items
 
     def get_by_id(self, item_id: str) -> Granule:
+        """Get specific MTG granule by ID.
+
+        Args:
+            item_id (str): Granule identifier
+
+        Returns:
+            Granule: Requested granule with metadata
+
+        Raises:
+            NotImplementedError: Method not yet implemented
+        """
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
+        """Get list of files for a downloaded MTG granule.
+
+        Args:
+            item (Granule): Granule with local_path set
+
+        Returns:
+            list[Path | str]: List of all files in the granule directory
+
+        Raises:
+            ValueError: If local_path is not set (granule not downloaded)
+        """
         if item.local_path is None:
             raise ValueError(
                 f"Resource not found: granule '{item.granule_id}' has no local_path "
@@ -116,6 +169,20 @@ class MTGSource(DataSource):
         generate: bool = False,
         **scene_options: dict[str, Any],
     ) -> Scene:
+        """Load MTG data into a Satpy Scene.
+
+        Args:
+            item (Granule): Granule to load
+            datasets (list[str] | None): List of dataset names to load. Defaults to None.
+            generate (bool): Whether to generate composites. Defaults to False.
+            **scene_options (dict[str, Any]): Additional scene options
+
+        Returns:
+            Scene: Loaded Satpy scene with requested datasets
+
+        Raises:
+            ValueError: If datasets is None and no default composite is configured
+        """
         if not datasets:
             if self.default_composite is None:
                 raise ValueError(
@@ -143,6 +210,17 @@ class MTGSource(DataSource):
             assert "access_token=" in asset.href, "The URL does not contain the 'access_token' query parameter."
 
     def download_item(self, item: Granule, destination: Path) -> bool:
+        """Download single MTG item and extract to destination.
+
+        Downloads the product ZIP file, extracts it, saves metadata, and removes the ZIP.
+
+        Args:
+            item (Granule): Granule to download
+            destination (Path): Directory to save extracted files
+
+        Returns:
+            bool: True if download succeeded, False otherwise
+        """
         self.validate(item)
         zip_asset = cast(MTGAsset, item.assets["product"])
         local_file = destination / f"{item.granule_id}.zip"
@@ -174,14 +252,14 @@ class MTGSource(DataSource):
         """Save granule item to output files after processing.
 
         Args:
-            item: Granule to process
-            destination: Base destination directory
-            writer: Writer instance for output
-            params: Conversion parameters
-            force: If True, overwrite existing files
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
         # Validate inputs using base class helper
         self._validate_save_inputs(item, params)

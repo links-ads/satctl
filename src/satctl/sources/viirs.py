@@ -57,6 +57,18 @@ class VIIRSSource(EarthDataSource):
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize VIIRS data source.
+
+        Args:
+            collection_name (str): Name of the VIIRS collection
+            reader (str): Satpy reader name for this product type
+            downloader (Downloader): Downloader instance for file retrieval
+            short_name (str): NASA CMR short name for the dataset
+            version (str | None): Dataset version. Defaults to None.
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+        """
         super().__init__(
             collection_name,
             reader=reader,
@@ -241,6 +253,14 @@ class VIIRSL1BSource(VIIRSSource):
         product_type: list[Literal["mod", "img"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize VIIRS Level 1B data source.
+
+        Args:
+            downloader (Downloader): Downloader instance for file retrieval
+            satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
+            product_type (list[Literal["mod", "img"]]): List of product types to search
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+        """
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []
         for sat, prod in product(satellite, product_type):
@@ -303,6 +323,20 @@ class VIIRSL1BSource(VIIRSSource):
         return all_items
 
     def get_by_id(self, item_id: str, **_kwargs) -> Granule:
+        """Get specific VIIRS granule by ID.
+
+        Automatically detects the short_name from the granule ID format.
+
+        Args:
+            item_id (str): Granule identifier (e.g., "VNP02MOD.A2025227.1354.002.2025227231707")
+            **_kwargs: Additional keyword arguments (unused)
+
+        Returns:
+            Granule: Requested granule with metadata
+
+        Raises:
+            ValueError: If granule ID format is invalid or not in configured combinations
+        """
         # Parse the granule_id to determine which combination it belongs to
         try:
             parsed = self._parse_granule_id(item_id)

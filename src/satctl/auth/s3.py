@@ -27,17 +27,19 @@ class S3Authenticator(Authenticator):
         s3_credentials_url: str | None = None,
         use_temp_credentials: bool = True,
     ):
-        """
-        Initialize S3 authenticator for Copernicus Data Space Ecosystem.
+        """Initialize S3 authenticator for Copernicus Data Space Ecosystem.
 
         Args:
-            token_url: OAuth2 token endpoint URL
-            client_id: OAuth2 client ID
-            username: Copernicus username
-            password: Copernicus password
-            s3_credentials_url: URL to obtain temporary S3 credentials (optional)
-            endpoint_url: S3 endpoint URL
-            use_temp_credentials: Whether to use temporary S3 credentials (default True)
+            token_url (str): OAuth2 token endpoint URL
+            client_id (str): OAuth2 client ID
+            username (str): Copernicus username
+            password (str): Copernicus password
+            endpoint_url (str): S3 endpoint URL
+            s3_credentials_url (str | None): URL to obtain temporary S3 credentials. Defaults to None.
+            use_temp_credentials (bool): Whether to use temporary S3 credentials. Defaults to True.
+
+        Raises:
+            ValueError: If any required parameter is missing
         """
         self.token_url = token_url
         self.client_id = client_id
@@ -63,7 +65,11 @@ class S3Authenticator(Authenticator):
             raise ValueError("Invalid configuration: username and password are required")
 
     def authenticate(self) -> bool:
-        """Authenticate with OAuth2 and optionally obtain S3 credentials."""
+        """Authenticate with OAuth2 and optionally obtain S3 credentials.
+
+        Returns:
+            bool: True if authentication succeeded, False otherwise
+        """
         # First, get OAuth2 token
         if not self._get_oauth_token():
             return False
@@ -76,7 +82,11 @@ class S3Authenticator(Authenticator):
         return True
 
     def _get_oauth_token(self) -> bool:
-        """Get OAuth2 access token from Copernicus."""
+        """Get OAuth2 access token from Copernicus.
+
+        Returns:
+            bool: True if token obtained successfully, False otherwise
+        """
         try:
             data = {
                 "grant_type": "password",
@@ -106,7 +116,11 @@ class S3Authenticator(Authenticator):
             return False
 
     def _get_s3_credentials(self) -> bool:
-        """Get temporary S3 credentials using OAuth2 token."""
+        """Get temporary S3 credentials using OAuth2 token.
+
+        Returns:
+            bool: True if credentials obtained successfully, False otherwise
+        """
         if not self.access_token:
             log.error("No OAuth access token available")
             return False
@@ -144,7 +158,11 @@ class S3Authenticator(Authenticator):
             return False
 
     def _refresh_oauth_token(self) -> bool:
-        """Refresh OAuth2 access token using refresh token."""
+        """Refresh OAuth2 access token using refresh token.
+
+        Returns:
+            bool: True if refresh succeeded, False otherwise
+        """
         if not self.refresh_token:
             log.warning("No refresh token available, need to re-authenticate")
             return self._get_oauth_token()
@@ -179,7 +197,11 @@ class S3Authenticator(Authenticator):
             return self._get_oauth_token()
 
     def _are_s3_credentials_valid(self) -> bool:
-        """Check if S3 credentials are still valid."""
+        """Check if S3 credentials are still valid.
+
+        Returns:
+            bool: True if credentials are valid, False otherwise
+        """
         if not self.s3_access_key or not self.s3_secret_key:
             return False
 
@@ -192,7 +214,14 @@ class S3Authenticator(Authenticator):
         return True
 
     def ensure_authenticated(self, refresh: bool = False) -> bool:
-        """Ensure we have valid S3 credentials."""
+        """Ensure we have valid S3 credentials.
+
+        Args:
+            refresh (bool): If True, force credential refresh. Defaults to False.
+
+        Returns:
+            bool: True if credentials are valid, False otherwise
+        """
         if self.use_temp_credentials:
             if refresh or not self._are_s3_credentials_valid():
                 # Try to refresh OAuth token and get new S3 credentials
@@ -208,7 +237,14 @@ class S3Authenticator(Authenticator):
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        """Get OAuth2 authorization headers."""
+        """Get OAuth2 authorization headers.
+
+        Returns:
+            dict[str, str]: Dictionary with Authorization header
+
+        Raises:
+            RuntimeError: If OAuth2 authentication fails
+        """
         if not self.access_token:
             if not self._get_oauth_token():
                 raise RuntimeError("Authentication failed for Copernicus Data Space: could not obtain OAuth2 token")
@@ -216,7 +252,14 @@ class S3Authenticator(Authenticator):
 
     @property
     def auth_session(self) -> Any:
-        """Return boto3 session configured with S3 credentials."""
+        """Return boto3 session configured with S3 credentials.
+
+        Returns:
+            Any: boto3.Session configured with temporary or default credentials
+
+        Raises:
+            RuntimeError: If S3 credentials cannot be obtained
+        """
         if self.use_temp_credentials:
             if not self._are_s3_credentials_valid():
                 if not self.ensure_authenticated():

@@ -28,6 +28,11 @@ cli_context = CLIContext()
 
 
 def init_reporter() -> None:
+    """Initialize and start the progress reporter.
+
+    Raises:
+        ValueError: If no progress reporter is configured in context
+    """
     if cli_context.progress_reporter is None:
         raise ValueError(
             "Invalid configuration: progress reporter not found in context "
@@ -41,6 +46,12 @@ def main(
     log_level: Annotated[str, typer.Option("--log-level", "-l", help="Set logging level")] = "INFO",
     progress: Annotated[Literal["empty", "simple", "rich"], typer.Option("--progress", "-p")] = "empty",
 ):
+    """Configure global logging and progress reporting for CLI.
+
+    Args:
+        log_level (str): Logging level. Defaults to "INFO".
+        progress (Literal["empty", "simple", "rich"]): Progress reporter type. Defaults to "empty".
+    """
     from satctl.progress import create_reporter, registry
 
     reporter_cls = registry.get(progress)
@@ -69,6 +80,16 @@ def download(
         int | None, typer.Option("--num-workers", "-nw", help="Workers count for parallel processing")
     ] = None,
 ):
+    """Download satellite data from specified sources.
+
+    Args:
+        sources (list[str]): List of source names or ["all"] for all sources
+        start (datetime): Start of time range
+        end (datetime): End of time range
+        area_file (Path): Path to GeoJSON file defining area of interest
+        output_dir (Path | None): Output directory. Defaults to None.
+        num_workers (int | None): Number of parallel workers. Defaults to None.
+    """
     from satctl.model import SearchParams
     from satctl.sources import create_source, registry
 
@@ -116,6 +137,20 @@ def convert(
         int | None, typer.Option("--num-workers", "-nw", help="Workers count for parallel processing")
     ] = None,
 ):
+    """Convert downloaded satellite data to processed outputs.
+
+    Args:
+        sources (list[str]): List of source names or ["all"] for all sources
+        area_file (Path | None): Path to GeoJSON file for area of interest. Defaults to None.
+        input_dir (Path | None): Directory with raw downloaded files. Defaults to None.
+        output_dir (Path | None): Directory for processed outputs. Defaults to None.
+        crs (str): Target coordinate reference system. Defaults to "EPSG:4326".
+        datasets (list[str] | None): Datasets to process. Defaults to None.
+        resolution (int | None): Output resolution. Defaults to None.
+        force_conversion (bool): Force reprocessing of existing files. Defaults to False.
+        writer_name (str): Writer to use for outputs. Defaults to "geotiff".
+        num_workers (int | None): Number of parallel workers. Defaults to None.
+    """
     from satctl.model import ConversionParams, Granule
     from satctl.sources import create_source, registry
     from satctl.writers import create_writer

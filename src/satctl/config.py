@@ -27,6 +27,14 @@ class EnvYamlConfigSettingsSource(YamlConfigSettingsSource):
         )
 
     def _read_file(self, file_path: Path) -> dict[str, Any]:
+        """Read YAML file with environment variable expansion.
+
+        Args:
+            file_path (Path): Path to YAML configuration file
+
+        Returns:
+            dict[str, Any]: Parsed configuration data with environment variables expanded
+        """
         if Path(file_path).exists():
             return dict(envyaml.EnvYAML(file_path, self.env_file, flatten=False))
         return {}
@@ -52,6 +60,18 @@ class SatCtlSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Customize settings sources to include YAML configuration.
+
+        Args:
+            settings_cls (type[BaseSettings]): Settings class being configured
+            init_settings (PydanticBaseSettingsSource): Initialization settings source
+            env_settings (PydanticBaseSettingsSource): Environment variable settings source
+            dotenv_settings (PydanticBaseSettingsSource): Dotenv file settings source
+            file_secret_settings (PydanticBaseSettingsSource): File secrets settings source
+
+        Returns:
+            tuple[PydanticBaseSettingsSource, ...]: Ordered tuple of settings sources
+        """
         return (
             init_settings,
             env_settings,

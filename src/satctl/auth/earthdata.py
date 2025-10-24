@@ -22,16 +22,16 @@ class EarthDataAuthenticator(Authenticator):
         password: str | None = None,
         mode: Literal["requests_https", "fsspec_https", "s3fs"] = "requests_https",
     ):
-        """Authenticates the user on EarthData using earthaccess.
+        """Initialize EarthData authenticator.
 
         Args:
-            strategy (["environment", "interactive", "netrc"], optional): Authentication strategy. Defaults to "environment".
-            username (str | None, optional): Username to inject. Defaults to None.
-            password (str | None, optional): Password to inject. Defaults to None.
-            mode (["https", "fsspec", "s3"], optional): session mode to be returned. Defaults to https.
+            strategy (Literal["environment", "interactive", "netrc"]): Authentication strategy. Defaults to "environment".
+            username (str | None): Username to inject. Defaults to None.
+            password (str | None): Password to inject. Defaults to None.
+            mode (Literal["requests_https", "fsspec_https", "s3fs"]): Session mode. Defaults to "requests_https".
 
         Raises:
-            ValueError: validation might fail.
+            ValueError: If credentials are missing when using environment strategy
         """
         self.strategy = strategy
         self.mode = mode
@@ -53,27 +53,51 @@ class EarthDataAuthenticator(Authenticator):
             os.environ[self.ENV_PASS_NAME] = self.password
 
     def authenticate(self) -> bool:
+        """Perform authentication with NASA Earthdata.
+
+        Returns:
+            bool: True if authentication succeeded, False otherwise
+        """
         log.debug("Authenticating to earthaccess using strategy: %s", self.strategy)
         self._auth = earthaccess.login(strategy=self.strategy)
         return self._auth.authenticated
 
     def ensure_authenticated(self, refresh: bool = False) -> bool:
-        """Ensure we have valid authentication with NASA Earthdata."""
+        """Ensure we have valid authentication with NASA Earthdata.
+
+        Args:
+            refresh (bool): If True, force re-authentication. Defaults to False.
+
+        Returns:
+            bool: True if authenticated, False otherwise
+        """
         if not self._auth or not self._auth.authenticated or refresh:
             return self.authenticate()
         return self._auth.authenticated
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        """
+        """Get authentication headers for HTTP requests.
+
         Note: earthaccess handles authentication internally,
-        so we don't need to provide explicit headers.
+        so this returns an empty dict.
+
+        Returns:
+            dict[str, str]: Empty dictionary (earthaccess manages auth internally)
         """
         self.ensure_authenticated()
         return {}
 
     @property
     def auth_session(self) -> Any:
+        """Get authenticated session from earthaccess.
+
+        Returns:
+            Any: Session object based on configured mode (requests, fsspec, or s3fs)
+
+        Raises:
+            ValueError: If mode is not supported by earthaccess
+        """
         self.ensure_authenticated()
         session_name = f"get_{self.mode}_session"
         if not hasattr(earthaccess, session_name):

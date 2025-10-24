@@ -68,6 +68,19 @@ class Sentinel2Source(DataSource):
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-2 source.
+
+        Args:
+            collection_name (str): Collection name identifier
+            reader (str): Satpy reader name
+            downloader (Downloader): Downloader instance
+            stac_url (str): STAC catalog URL
+            default_composite (str | None): Default composite name. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum search results. Defaults to 100.
+            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
+            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
+        """
         super().__init__(
             collection_name,
             downloader=downloader,
@@ -82,9 +95,26 @@ class Sentinel2Source(DataSource):
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     @abstractmethod
-    def _parse_item_name(self, name: str) -> ProductInfo: ...
+    def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse item name into ProductInfo.
+
+        Args:
+            name (str): Item name to parse
+
+        Returns:
+            ProductInfo: ProductInfo with extracted metadata
+        """
+        ...
 
     def search(self, params: SearchParams) -> list[Granule]:
+        """Search for Sentinel-2 granules via STAC catalog.
+
+        Args:
+            params (SearchParams): Search parameters including time range and area
+
+        Returns:
+            list[Granule]: List of matching granules
+        """
         log.debug("Setting up the STAC client")
         catalogue = Client.open(self.stac_url)
 
@@ -110,10 +140,33 @@ class Sentinel2Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str, **kwargs: Any) -> Granule:
+        """Retrieve a specific granule by ID.
+
+        Args:
+            item_id (str): Granule identifier
+            **kwargs (Any): Additional keyword arguments
+
+        Returns:
+            Granule: The requested granule
+
+        Raises:
+            NotImplementedError: Method not yet implemented
+        """
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
+        """Get list of files from SAFE structure.
+
+        Args:
+            item (Granule): Granule with local_path set
+
+        Returns:
+            list[Path | str]: List of all files in SAFE structure
+
+        Raises:
+            ValueError: If local_path is None or SAFE structure is invalid
+        """
         if item.local_path is None:
             raise ValueError(
                 f"Resource not found: granule '{item.granule_id}' has no local_path "
@@ -137,10 +190,13 @@ class Sentinel2Source(DataSource):
             )
 
     def validate(self, item: Granule) -> None:
-        """Validates a Sentinel2 STAC item.
+        """Validate a Sentinel-2 STAC item.
 
         Args:
             item (Granule): STAC item to validate
+
+        Raises:
+            AssertionError: If asset media types are invalid
         """
         for name, asset in item.assets.items():
             asset = cast(S2Asset, asset)
@@ -160,19 +216,22 @@ class Sentinel2Source(DataSource):
         datasets: list[str] | None = None,
         generate: bool = False,
         calibration: str = "counts",
-        **scene_options: dict[str, Any],
+        **scene_options: Any,
     ) -> Scene:
         """Load a Sentinel-2 scene with specified calibration.
 
         Args:
             item (Granule): Granule to load
-            datasets (list[str] | None): List of datasets/composites to load
-            generate (bool): Whether to generate composites
-            calibration (str): Calibration type - 'counts' (DN 0-10000, default) or 'reflectance' (percentage 0-100%)
-            **scene_options: Additional scene options
+            datasets (list[str] | None): List of datasets/composites to load. Defaults to None.
+            generate (bool): Whether to generate composites. Defaults to False.
+            calibration (str): Calibration type - 'counts' (DN 0-10000) or 'reflectance' (percentage 0-100%). Defaults to 'counts'.
+            **scene_options (Any): Additional keyword arguments passed to Scene reader
 
         Returns:
             Scene: Loaded satpy Scene object
+
+        Raises:
+            ValueError: If datasets is None and no default_composite is set
         """
         if not datasets:
             if self.default_composite is None:
@@ -190,14 +249,14 @@ class Sentinel2Source(DataSource):
         return scene
 
     def download_item(self, item: Granule, destination: Path) -> bool:
-        """Download only the specified assets to destination/item.granule_id.
+        """Download required assets preserving SAFE directory structure.
 
         Args:
-            item (Granule): Sentinel-2 MSI product to download.
-            destination (Path): Path to the destination directory.
+            item (Granule): Sentinel-2 MSI product to download
+            destination (Path): Base destination directory
 
         Returns:
-            bool: True if all specified assets were downloaded successfully, False otherwise.
+            bool: True if all specified assets were downloaded successfully, False otherwise
         """
         self.validate(item)
 
@@ -282,14 +341,14 @@ class Sentinel2Source(DataSource):
         """Save granule item to output files after processing.
 
         Args:
-            item: Granule to process
-            destination: Base destination directory
-            writer: Writer instance for output
-            params: Conversion parameters
-            force: If True, overwrite existing files
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
         # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
@@ -346,11 +405,22 @@ class Sentinel2L2ASource(Sentinel2Source):
         downloader: Downloader,
         stac_url: str,
         default_composite: str = "true_color",
-        default_resolution=10,
+        default_resolution: int = 10,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-2 L2A source.
+
+        Args:
+            downloader (Downloader): Downloader instance
+            stac_url (str): STAC catalog URL
+            default_composite (str): Default composite name. Defaults to 'true_color'.
+            default_resolution (int): Default resolution in meters. Defaults to 10.
+            search_limit (int): Maximum search results. Defaults to 100.
+            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
+            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
+        """
         super().__init__(
             "sentinel-2-l2a",
             reader="msi_safe_l2a",
@@ -364,6 +434,17 @@ class Sentinel2L2ASource(Sentinel2Source):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse Sentinel-2 L2A item name.
+
+        Args:
+            name (str): Item name to parse
+
+        Returns:
+            ProductInfo: Extracted product information
+
+        Raises:
+            ValueError: If name doesn't match L2A pattern
+        """
         pattern = r"S2([ABC])_MSIL2A_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
@@ -414,11 +495,22 @@ class Sentinel2L1CSource(Sentinel2Source):
         downloader: Downloader,
         stac_url: str,
         default_composite: str = "true_color",
-        default_resolution=10,
+        default_resolution: int = 10,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-2 L1C source.
+
+        Args:
+            downloader (Downloader): Downloader instance
+            stac_url (str): STAC catalog URL
+            default_composite (str): Default composite name. Defaults to 'true_color'.
+            default_resolution (int): Default resolution in meters. Defaults to 10.
+            search_limit (int): Maximum search results. Defaults to 100.
+            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
+            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
+        """
         super().__init__(
             "sentinel-2-l1c",
             reader="msi_safe",
@@ -432,6 +524,17 @@ class Sentinel2L1CSource(Sentinel2Source):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse Sentinel-2 L1C item name.
+
+        Args:
+            name (str): Item name to parse
+
+        Returns:
+            ProductInfo: Extracted product information
+
+        Raises:
+            ValueError: If name doesn't match L1C pattern
+        """
         pattern = r"S2([ABC])_MSIL1C_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:

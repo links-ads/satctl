@@ -18,15 +18,30 @@ class EventBus:
         self._lock = threading.Lock()
 
     def subscribe(self, handler: Callable[[ProgressEvent], None]):
+        """Subscribe a handler to receive progress events.
+
+        Args:
+            handler (Callable[[ProgressEvent], None]): Event handler function
+        """
         with self._lock:
             self._handlers.append(handler)
 
     def unsubscribe(self, handler: Callable[[ProgressEvent], None]):
+        """Unsubscribe a handler from receiving progress events.
+
+        Args:
+            handler (Callable[[ProgressEvent], None]): Event handler function to remove
+        """
         with self._lock:
             if handler in self._handlers:
                 self._handlers.remove(handler)
 
     def emit(self, event: ProgressEvent):
+        """Emit a progress event to all subscribed handlers.
+
+        Args:
+            event (ProgressEvent): Event to emit
+        """
         with self._lock:
             handlers = self._handlers.copy()
 

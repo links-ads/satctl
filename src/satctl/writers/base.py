@@ -9,6 +9,11 @@ class Writer(ABC):
     """Base class for writing processed satellite data."""
 
     def __init__(self, extension: str) -> None:
+        """Initialize writer with file extension.
+
+        Args:
+            extension (str): File extension for output files (e.g., ".tif", ".nc")
+        """
         super().__init__()
         self.extension = extension
 
@@ -16,10 +21,10 @@ class Writer(ABC):
         """Parse datasets into normalized dict format.
 
         Args:
-            datasets: Dataset specification (name, list of names, or name->filename mapping)
+            datasets (str | list[str] | dict[str, str]): Dataset specification
 
         Returns:
-            Dictionary mapping dataset names to output filenames
+            dict[str, str]: Dictionary mapping dataset names to output filenames
 
         Raises:
             TypeError: If datasets type is not supported
@@ -43,8 +48,8 @@ class Writer(ABC):
         """Write dataset to file in the specific format.
 
         Args:
-            dataset: Xarray DataArray with satellite data and metadata
-            output_path: Path where the output file will be written
+            dataset (DataArray): Xarray DataArray with satellite data and metadata
+            output_path (Path): Path where the output file will be written
             **kwargs: Writer-specific options (compression, dtype, etc.)
 
         Raises:

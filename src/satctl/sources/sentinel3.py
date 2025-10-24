@@ -42,6 +42,19 @@ class Sentinel3Source(DataSource):
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-3 data source.
+
+        Args:
+            collection_name (str): Name of the Sentinel-3 collection
+            reader (str): Satpy reader name for this product type
+            downloader (Downloader): Downloader instance for file retrieval
+            stac_url (str): STAC catalog URL for searching
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            download_pool_conns (int): Number of download pool connections. Defaults to 10.
+            download_pool_size (int): Size of download pool. Defaults to 2.
+        """
         super().__init__(
             collection_name,
             downloader=downloader,
@@ -56,9 +69,26 @@ class Sentinel3Source(DataSource):
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     @abstractmethod
-    def _parse_item_name(self, name: str) -> ProductInfo: ...
+    def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse Sentinel-3 item name into product information.
+
+        Args:
+            name (str): Sentinel-3 item identifier
+
+        Returns:
+            ProductInfo: Parsed product metadata
+        """
+        ...
 
     def search(self, params: SearchParams) -> list[Granule]:
+        """Search for Sentinel-3 data using STAC catalog.
+
+        Args:
+            params (SearchParams): Search parameters including time range and area
+
+        Returns:
+            list[Granule]: List of matching granules with metadata and assets
+        """
         log.debug("Setting up the STAC client")
         catalogue = Client.open(self.stac_url)
 
@@ -82,9 +112,32 @@ class Sentinel3Source(DataSource):
         return items
 
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
+        """Get specific Sentinel-3 granule by ID.
+
+        Args:
+            item_id (str): Granule identifier
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            Granule: Requested granule with metadata
+
+        Raises:
+            NotImplementedError: Method not yet implemented
+        """
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
+        """Get list of files for a downloaded Sentinel-3 granule.
+
+        Args:
+            item (Granule): Granule with local_path set
+
+        Returns:
+            list[Path | str]: List of all files in the granule directory
+
+        Raises:
+            ValueError: If local_path is not set (granule not downloaded)
+        """
         if item.local_path is None:
             raise ValueError(
                 f"Resource not found: granule '{item.granule_id}' has no local_path "
@@ -110,7 +163,18 @@ class Sentinel3Source(DataSource):
                 assert name == "xfdumanifest"
 
     def download_item(self, item: Granule, destination: Path) -> bool:
-        """Download single item - can be called in thread pool."""
+        """Download single Sentinel-3 item and extract to destination.
+
+        Downloads the product ZIP file, extracts it, saves metadata, and removes the ZIP.
+        Can be called in thread pool for parallel downloads.
+
+        Args:
+            item (Granule): Granule to download
+            destination (Path): Directory to save extracted files
+
+        Returns:
+            bool: True if download succeeded, False otherwise
+        """
         self.validate(item)
         zip_asset = cast(S3Asset, item.assets["product"])
         local_file = destination / f"{item.granule_id}.zip"
@@ -145,14 +209,14 @@ class Sentinel3Source(DataSource):
         """Save granule item to output files after processing.
 
         Args:
-            item: Granule to process
-            destination: Base destination directory
-            writer: Writer instance for output
-            params: Conversion parameters
-            force: If True, overwrite existing files
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
         # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
@@ -189,6 +253,17 @@ class SLSTRSource(Sentinel3Source):
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-3 SLSTR data source.
+
+        Args:
+            downloader (Downloader): Downloader instance for file retrieval
+            stac_url (str): STAC catalog URL for searching
+            default_composite (str): Default composite/band to load. Defaults to "all_bands".
+            default_resolution (int): Default resolution in meters. Defaults to 1000.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            download_pool_conns (int): Number of download pool connections. Defaults to 10.
+            download_pool_size (int): Size of download pool. Defaults to 2.
+        """
         super().__init__(
             "sentinel-3-sl-1-rbt-ntc",
             reader="slstr_l1b",
@@ -202,6 +277,17 @@ class SLSTRSource(Sentinel3Source):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse SLSTR item name into product information.
+
+        Args:
+            name (str): SLSTR item identifier (e.g., "S3A_SL_1_RBT____20251024T123456")
+
+        Returns:
+            ProductInfo: Parsed product metadata
+
+        Raises:
+            ValueError: If name format is invalid
+        """
         pattern = r"S3([AB])_SL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
@@ -233,6 +319,17 @@ class OLCISource(Sentinel3Source):
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-3 OLCI data source.
+
+        Args:
+            downloader (Downloader): Downloader instance for file retrieval
+            stac_url (str): STAC catalog URL for searching
+            default_composite (str): Default composite/band to load. Defaults to "all_bands".
+            default_resolution (int): Default resolution in meters. Defaults to 300.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            download_pool_conns (int): Number of download pool connections. Defaults to 10.
+            download_pool_size (int): Size of download pool. Defaults to 2.
+        """
         super().__init__(
             "sentinel-3-olci-1-efr-ntc",
             reader="olci_l1b",
@@ -246,6 +343,17 @@ class OLCISource(Sentinel3Source):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse OLCI item name into product information.
+
+        Args:
+            name (str): OLCI item identifier (e.g., "S3A_OL_1_EFR____20251024T123456")
+
+        Returns:
+            ProductInfo: Parsed product metadata
+
+        Raises:
+            ValueError: If name format is invalid
+        """
         pattern = r"S3([AB])_OL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:

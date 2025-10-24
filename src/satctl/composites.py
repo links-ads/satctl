@@ -71,10 +71,10 @@ class MultiBandCompositor(CompositeBase):
         """Extract meaningful band names from datasets.
 
         Args:
-            datasets (Sequence[xr.DataArray]): input datasets.
+            datasets (Sequence[xr.DataArray]): Input datasets
 
         Returns:
-            list[str]:list of band names.
+            list[str]: List of band names
         """
         band_names = []
         for band_index, dataset in enumerate(datasets):
@@ -119,9 +119,9 @@ class MultiBandCompositor(CompositeBase):
         """Update attributes dictionary in-place for single dataset case.
 
         Args:
-            attrs: Attributes dictionary to update
-            datasets: Input datasets (for sensor info)
-            extra_attrs: Additional attributes to add
+            attrs (dict): Attributes dictionary to update
+            datasets (Sequence[xr.DataArray]): Input datasets for sensor info
+            extra_attrs (dict): Additional attributes to add
         """
         attrs.update(extra_attrs)
         attrs.update(self.attrs)
@@ -131,10 +131,10 @@ class MultiBandCompositor(CompositeBase):
         """Extract and combine sensor information from datasets.
 
         Args:
-            datasets: Input datasets
+            datasets (Sequence[xr.DataArray]): Input datasets
 
         Returns:
-            Single sensor string, list of sensors, or None if no sensor info
+            str | list[str] | None: Single sensor string, list of sensors, or None if no sensor info
         """
         sensors = set()
         for dataset in datasets:
