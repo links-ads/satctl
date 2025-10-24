@@ -68,10 +68,6 @@ class VIIRSSource(EarthDataSource):
             search_limit=search_limit,
         )
 
-    # ============================================================================
-    # VIIRS-specific implementations
-    # ============================================================================
-
     def _parse_granule_id(self, granule_id: str) -> ParsedGranuleId:
         """Parse a VIIRS granule ID into its components.
 

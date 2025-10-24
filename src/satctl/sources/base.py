@@ -38,17 +38,9 @@ class DataSource(ABC):
         self.default_resolution = default_resolution
         self.reader = None
 
-    # ============================================================================
-    # Properties
-    # ============================================================================
-
     @property
     def collections(self) -> list[str]:
         return [self.source_name]
-
-    # ============================================================================
-    # Abstract methods
-    # ============================================================================
 
     @abstractmethod
     def search(self, params: SearchParams) -> list[Granule]: ...
@@ -79,10 +71,6 @@ class DataSource(ABC):
         force: bool = False,
     ) -> dict[str, list]: ...
 
-    # ============================================================================
-    # Hook methods
-    # ============================================================================
-
     def get_downloader_init_kwargs(self) -> dict:
         """Hook method for subclasses to provide downloader initialization arguments.
 
@@ -92,10 +80,6 @@ class DataSource(ABC):
             dict: Keyword arguments to pass to downloader.init()
         """
         return {}
-
-    # ============================================================================
-    # Public API - Download operations
-    # ============================================================================
 
     def download(
         self,
@@ -154,10 +138,6 @@ class DataSource(ABC):
             )
             return success, failure
 
-    # ============================================================================
-    # Public API - Scene operations
-    # ============================================================================
-
     def load_scene(
         self,
         item: Granule,
@@ -178,10 +158,6 @@ class DataSource(ABC):
         )
         scene.load(datasets)
         return scene
-
-    # ============================================================================
-    # Public API - Resampling and area utilities
-    # ============================================================================
 
     def resample(
         self,
@@ -308,10 +284,6 @@ class DataSource(ABC):
         )
         return cast(AreaDefinition, area_def)
 
-    # ============================================================================
-    # Public API - Save operations
-    # ============================================================================
-
     def save(
         self,
         items: Granule | list[Granule],
@@ -379,10 +351,6 @@ class DataSource(ABC):
                 executor.shutdown()
 
         return success, failure
-
-    # ============================================================================
-    # Protected helpers - Save item utilities
-    # ============================================================================
 
     def _validate_save_inputs(self, item: Granule, params: ConversionParams) -> None:
         """Validate inputs for save_item operation.

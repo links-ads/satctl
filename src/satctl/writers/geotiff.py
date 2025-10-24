@@ -18,10 +18,6 @@ log = logging.getLogger(__name__)
 class GeoTIFFWriter(Writer):
     """Writer for GeoTIFF format with configurable options."""
 
-    # ============================================================================
-    # Initialization
-    # ============================================================================
-
     def __init__(
         self,
         compress: str = "lzw",
@@ -34,10 +30,6 @@ class GeoTIFFWriter(Writer):
         self.tiled = tiled
         self.dtype = dtype
         self.fill_value = fill_value
-
-    # ============================================================================
-    # Private helpers
-    # ============================================================================
 
     def _get_transform_gcps(self, data_arr: DataArray) -> tuple[CRS | None, Affine | None, Any]:
         crs = None
@@ -94,10 +86,6 @@ class GeoTIFFWriter(Writer):
             "tiled": self.tiled,
             "nodata": fill_value,
         }
-
-    # ============================================================================
-    # Public API
-    # ============================================================================
 
     def write(
         self,

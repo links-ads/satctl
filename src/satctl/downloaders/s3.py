@@ -19,10 +19,6 @@ DEFAULT_CHUNK_SIZE = 8192  # 8KB
 class S3Downloader(Downloader):
     """S3 downloader with authentication, retries, and progress reporting."""
 
-    # ============================================================================
-    # Initialization
-    # ============================================================================
-
     def __init__(
         self,
         authenticator: Authenticator,
@@ -47,10 +43,6 @@ class S3Downloader(Downloader):
         self.endpoint_url = endpoint_url
         self.region_name = region_name
         self.s3_client = None
-
-    # ============================================================================
-    # Public API
-    # ============================================================================
 
     def init(self) -> None:
         """Initialize S3 client with authentication."""

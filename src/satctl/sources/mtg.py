@@ -52,10 +52,6 @@ class MTGSource(DataSource):
         self.download_pool_size = download_pool_size
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
-    # ============================================================================
-    # Helper methods
-    # ============================================================================
-
     def _parse_item_name(self, name: str) -> ProductInfo:
         pattern = r"S3([AB])_OL_(\d)_(\w+)____(\d{8}T\d{6})"
         match = re.match(pattern, name)
@@ -72,10 +68,6 @@ class MTGSource(DataSource):
             product_type=groups[2],
             acquisition_time=acquisition_time,
         )
-
-    # ============================================================================
-    # Search operations
-    # ============================================================================
 
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Setting up the DataStore client")
@@ -106,10 +98,6 @@ class MTGSource(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    # ============================================================================
-    # Retrieval operations
-    # ============================================================================
-
     def get_by_id(self, item_id: str) -> Granule:
         raise NotImplementedError()
 
@@ -120,10 +108,6 @@ class MTGSource(DataSource):
                 "(download the granule first using download_item())"
             )
         return list(item.local_path.glob("*"))
-
-    # ============================================================================
-    # Scene operations
-    # ============================================================================
 
     def load_scene(
         self,
@@ -148,10 +132,6 @@ class MTGSource(DataSource):
         scene.load(datasets, upper_right_corner="NE")
         return scene
 
-    # ============================================================================
-    # Validation operations
-    # ============================================================================
-
     def validate(self, item: Granule) -> None:
         """Validates a MTG Product item.
 
@@ -161,10 +141,6 @@ class MTGSource(DataSource):
         for name, asset in item.assets.items():
             asset = cast(MTGAsset, asset)
             assert "access_token=" in asset.href, "The URL does not contain the 'access_token' query parameter."
-
-    # ============================================================================
-    # Download operations
-    # ============================================================================
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         self.validate(item)
@@ -186,10 +162,6 @@ class MTGSource(DataSource):
         else:
             log.warning("Failed to download: %s", item.granule_id)
         return result
-
-    # ============================================================================
-    # Processing operations
-    # ============================================================================
 
     def save_item(
         self,

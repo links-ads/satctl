@@ -22,10 +22,6 @@ DEFAULT_POOL_MAX_SIZE = 2
 class HTTPDownloader(Downloader):
     """HTTP downloader with authentication, retries, and progress reporting."""
 
-    # ============================================================================
-    # Initialization
-    # ============================================================================
-
     def __init__(
         self,
         authenticator: Authenticator,
@@ -41,10 +37,6 @@ class HTTPDownloader(Downloader):
         self.timeout = timeout
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
-
-    # ============================================================================
-    # Public API
-    # ============================================================================
 
     def init(self, session: requests.Session | None = None, **kwargs) -> None:
         if not session:

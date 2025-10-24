@@ -55,16 +55,8 @@ class Sentinel3Source(DataSource):
         self.download_pool_size = download_pool_size
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
-    # ============================================================================
-    # Abstract methods
-    # ============================================================================
-
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
-
-    # ============================================================================
-    # Search operations
-    # ============================================================================
 
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Setting up the STAC client")
@@ -89,10 +81,6 @@ class Sentinel3Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    # ============================================================================
-    # Retrieval operations
-    # ============================================================================
-
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
         raise NotImplementedError()
 
@@ -103,10 +91,6 @@ class Sentinel3Source(DataSource):
                 "(download the granule first using download_item())"
             )
         return list(item.local_path.glob("*"))
-
-    # ============================================================================
-    # Validation operations
-    # ============================================================================
 
     def validate(self, item: Granule) -> None:
         """Validates a Sentinel3 STAC item.
@@ -124,10 +108,6 @@ class Sentinel3Source(DataSource):
             # Check that we have a manifest file
             if asset.media_type == "application/xml":
                 assert name == "xfdumanifest"
-
-    # ============================================================================
-    # Download operations
-    # ============================================================================
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         """Download single item - can be called in thread pool."""
@@ -153,10 +133,6 @@ class Sentinel3Source(DataSource):
         else:
             log.warning("Failed to download: %s", item.granule_id)
         return result
-
-    # ============================================================================
-    # Processing operations
-    # ============================================================================
 
     def save_item(
         self,

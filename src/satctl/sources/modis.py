@@ -68,10 +68,6 @@ class MODISSource(EarthDataSource):
             search_limit=search_limit,
         )
 
-    # ============================================================================
-    # MODIS-specific implementations
-    # ============================================================================
-
     def _parse_granule_id(self, granule_id: str) -> ParsedGranuleId:
         """Parse a MODIS granule ID into its components.
 

@@ -107,10 +107,6 @@ class EarthDataSource(DataSource):
         self.search_limit = search_limit
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
-    # ============================================================================
-    # Abstract methods (sensor-specific implementations)
-    # ============================================================================
-
     @abstractmethod
     def _parse_granule_id(self, granule_id: str) -> ParsedGranuleId:
         """Parse a granule ID into its components.
@@ -214,10 +210,6 @@ class EarthDataSource(DataSource):
         """
         ...
 
-    # ============================================================================
-    # Granule ID utilities
-    # ============================================================================
-
     def _get_short_name_from_granule(self, granule_id: str) -> str:
         """Extract the short_name from a granule ID.
 
@@ -233,10 +225,6 @@ class EarthDataSource(DataSource):
         """
         parsed = self._parse_granule_id(granule_id)
         return f"{parsed.instrument}{parsed.level}{parsed.product_type}"
-
-    # ============================================================================
-    # Search operations
-    # ============================================================================
 
     def _search_single_combination(
         self,
@@ -301,10 +289,6 @@ class EarthDataSource(DataSource):
 
         return items
 
-    # ============================================================================
-    # Retrieval operations
-    # ============================================================================
-
     def _get_granule_by_short_name(self, item_id: str, short_name: str) -> Granule:
         """Fetch a specific granule by ID and short_name.
 
@@ -341,10 +325,6 @@ class EarthDataSource(DataSource):
             assets=parse_umm_assets(item, EarthDataAsset),
             info=self._parse_item_name(item_id),
         )
-
-    # ============================================================================
-    # Download operations
-    # ============================================================================
 
     def get_downloader_init_kwargs(self) -> dict:
         """Provide EarthData session to downloader initialization."""
@@ -402,10 +382,6 @@ class EarthDataSource(DataSource):
         item.to_file(granule_dir)
         return True
 
-    # ============================================================================
-    # Processing helpers (used by save_item)
-    # ============================================================================
-
     def _filter_datasets_by_day_night(
         self,
         datasets_dict: dict[str, str],
@@ -434,10 +410,6 @@ class EarthDataSource(DataSource):
                     f"dataset requires different day/night condition (data is {day_night_flag})"
                 )
         return filtered
-
-    # ============================================================================
-    # Processing operations
-    # ============================================================================
 
     def save_item(
         self,

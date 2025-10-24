@@ -81,16 +81,8 @@ class Sentinel2Source(DataSource):
         self.download_pool_size = download_pool_size
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
-    # ============================================================================
-    # Abstract methods
-    # ============================================================================
-
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo: ...
-
-    # ============================================================================
-    # Search operations
-    # ============================================================================
 
     def search(self, params: SearchParams) -> list[Granule]:
         log.debug("Setting up the STAC client")
@@ -118,10 +110,6 @@ class Sentinel2Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    # ============================================================================
-    # Retrieval operations
-    # ============================================================================
-
     def get_by_id(self, item_id: str) -> Granule:
         raise NotImplementedError()
 
@@ -148,10 +136,6 @@ class Sentinel2Source(DataSource):
                 "(expected GRANULE directory and manifest.safe file)"
             )
 
-    # ============================================================================
-    # Validation operations
-    # ============================================================================
-
     def validate(self, item: Granule) -> None:
         """Validates a Sentinel2 STAC item.
 
@@ -169,10 +153,6 @@ class Sentinel2Source(DataSource):
                 "application/json",
                 "text/plain",
             )
-
-    # ============================================================================
-    # Scene operations
-    # ============================================================================
 
     def load_scene(
         self,
@@ -208,10 +188,6 @@ class Sentinel2Source(DataSource):
         # Load with specified calibration
         scene.load(datasets, calibration=calibration)
         return scene
-
-    # ============================================================================
-    # Download operations
-    # ============================================================================
 
     def download_item(self, item: Granule, destination: Path) -> bool:
         """Download only the specified assets to destination/item.granule_id.
@@ -294,10 +270,6 @@ class Sentinel2Source(DataSource):
         else:
             log.warning("Failed to download all required assets for: %s", item.granule_id)
         return all_success
-
-    # ============================================================================
-    # Processing operations
-    # ============================================================================
 
     def save_item(
         self,
