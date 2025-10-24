@@ -1,35 +1,25 @@
 import logging
 import re
-import warnings
-from abc import abstractmethod
-from collections import defaultdict
 from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Literal, TypedDict
 
-import earthaccess
 import xarray as xr
-from pydantic import BaseModel
-from xarray import DataArray
 
-from satctl.auth.earthdata import EarthDataAuthenticator
 from satctl.downloaders import Downloader
-from satctl.downloaders.http import HTTPDownloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
-from satctl.sources import DataSource
+from satctl.model import Granule, ProductInfo, SearchParams
+from satctl.sources.earthdata import (
+    DAY_NIGHT_CONDITIONS,
+    DEFAULT_SEARCH_LIMIT,
+    EarthDataSource,
+    ParsedGranuleId,
+)
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
 # Constants
-ASSET_KEY_MAPPING = {
-    "0": "http",
-    "1": "s3",
-    "2": "html",
-    "3": "doi",
-}
-
 SATELLITE_CONFIG = {
     "vnp": {"prefix": "VNP", "version": "2"},
     "jp1": {"prefix": "VJ1", "version": "2.1"},
@@ -40,8 +30,6 @@ PRODUCT_CONFIG = {
     "mod": {"resolution": 750},
     "img": {"resolution": 375},
 }
-
-DAY_NIGHT_CONDITIONS = ("day", "night")
 
 
 class ProductCombination(TypedDict):
@@ -54,25 +42,7 @@ class ProductCombination(TypedDict):
     resolution: int
 
 
-class ParsedGranuleId(BaseModel):
-    """Parsed components of a VIIRS granule ID."""
-
-    instrument: str  # VNP, VJ1, VJ2, etc.
-    level: str  # 02, 03, etc.
-    product_type: str  # MOD, IMG, DNB, etc.
-    date: str  # A2025189
-    time: str  # 0000
-    version: str  # 002
-    timestamp: str  # 2025192163307
-
-
-class VIIRSAsset(BaseModel):
-    href: str
-    type: str
-    media_type: str
-
-
-class VIIRSSource(DataSource):
+class VIIRSSource(EarthDataSource):
     """Base source for VIIRS products"""
 
     def __init__(
@@ -85,30 +55,30 @@ class VIIRSSource(DataSource):
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize VIIRS data source.
+
+        Args:
+            collection_name (str): Name of the VIIRS collection
+            reader (str): Satpy reader name for this product type
+            downloader (Downloader): Downloader instance for file retrieval
+            short_name (str): NASA CMR short name for the dataset
+            version (str | None): Dataset version. Defaults to None.
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+        """
         super().__init__(
             collection_name,
+            reader=reader,
             downloader=downloader,
+            short_name=short_name,
+            version=version,
             default_composite=default_composite,
             default_resolution=default_resolution,
+            search_limit=search_limit,
         )
-        self.reader = reader
-        self.short_name = short_name
-        self.version = version
-        self.search_limit = search_limit
-        warnings.filterwarnings(action="ignore", category=UserWarning)
-
-    # ============================================================================
-    # Abstract methods
-    # ============================================================================
-
-    @abstractmethod
-    def _parse_item_name(self, name: str) -> ProductInfo: ...
-
-    # ============================================================================
-    # Granule ID utilities
-    # ============================================================================
 
     def _parse_granule_id(self, granule_id: str) -> ParsedGranuleId:
         """Parse a VIIRS granule ID into its components.
@@ -141,164 +111,17 @@ class VIIRSSource(DataSource):
             timestamp=match.group(7),
         )
 
-    def _get_short_name_from_granule(self, granule_id: str) -> str:
-        """Extract the short_name from a granule ID.
+    def _parse_item_name(self, name: str) -> ProductInfo:
+        parsed = self._parse_granule_id(name)
+        # Date format: A2025189 -> need to strip 'A' prefix for datetime parsing
+        date_str = parsed.date[1:]  # Remove 'A' prefix
+        acquisition_time = datetime.strptime(f"{date_str}{parsed.time}", "%Y%j%H%M").replace(tzinfo=timezone.utc)
 
-        Args:
-            granule_id: Full granule ID (e.g., "VNP02MOD.A2025227.1354.002.2025227231707")
-
-        Returns:
-            Short name (e.g., "VNP02MOD")
-
-        Example:
-            "VNP02MOD.A2025227.1354.002.2025227231707" -> "VNP02MOD"
-            "VJ102IMG.A2025189.0000.021.2025192163307" -> "VJ102IMG"
-        """
-        parsed = self._parse_granule_id(granule_id)
-        return f"{parsed.instrument}{parsed.level}{parsed.product_type}"
-
-    def convert_granule_id_with_wildcard(
-        self,
-        granule_id: str,
-        target_product: str,
-        wildcard_timestamp: bool = True,
-    ) -> str:
-        """Convert a granule ID to target a different product level with optional wildcard timestamp.
-
-        Args:
-            granule_id: Source granule ID
-            target_product: Target product level (e.g., "03" for georeference)
-            wildcard_timestamp: If True, replace timestamp with wildcard
-
-        Returns:
-            Converted granule ID pattern
-        """
-        parsed = self._parse_granule_id(granule_id)
-        timestamp = "*" if wildcard_timestamp else parsed.timestamp
-        return f"{parsed.instrument}{target_product}{parsed.product_type}.{parsed.date}.{parsed.time}.{parsed.version}.{timestamp}"
-
-    # ============================================================================
-    # Asset parsing utilities
-    # ============================================================================
-
-    def _parse_assets_from_umm_result(self, umm_result: dict) -> dict[str, VIIRSAsset]:
-        """Parse assets from UMM search result into VIIRSAsset objects.
-
-        Args:
-            umm_result: UMM format result from earthaccess search
-
-        Returns:
-            Dictionary mapping asset keys (http, s3, html, doi) to VIIRSAsset objects
-        """
-        return {
-            ASSET_KEY_MAPPING.get(str(k), "unknown"): VIIRSAsset(
-                href=url["URL"],
-                type=url["Type"],
-                media_type=url["MimeType"],
-            )
-            for k, url in enumerate(umm_result["umm"]["RelatedUrls"])
-        }
-
-    # ============================================================================
-    # Search operations
-    # ============================================================================
-
-    def _search_single_combination(
-        self,
-        short_name: str,
-        version: str | None,
-        params: SearchParams,
-    ) -> list[Granule]:
-        """Search for VIIRS granules for a single satellite/product combination.
-
-        Args:
-            short_name: NASA short name (e.g., "VNP02MOD", "VJ102IMG")
-            version: Product version (e.g., "2", "2.1")
-            params: Search parameters including time range and optional spatial filter
-
-        Returns:
-            List of granules for this combination
-        """
-        search_kwargs: dict[str, Any] = {
-            "short_name": short_name,
-            "temporal": (params.start.isoformat(), params.end.isoformat()),
-            "count": self.search_limit,
-        }
-
-        # Add version if specified
-        if version:
-            search_kwargs["version"] = version
-
-        # Add spatial filter if provided
-        if params.area_geometry:
-            search_kwargs["bounding_box"] = params.area_geometry.bounds
-
-        log.debug("Searching with parameters: %s", search_kwargs)
-        radiance_results = earthaccess.search_data(**search_kwargs)
-
-        items = []
-
-        for radiance_result in radiance_results:
-            radiance_id = radiance_result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
-            georeference_id_pattern = self.convert_granule_id_with_wildcard(radiance_id, "03")
-
-            georeference_result = earthaccess.search_data(
-                short_name=short_name.replace("02", "03"),
-                granule_name=georeference_id_pattern,
-            )[0]
-
-            items.append(
-                Granule(
-                    granule_id=radiance_id,
-                    source=self.collections[0],
-                    assets={
-                        "radiance": self._parse_assets_from_umm_result(radiance_result),
-                        "georeference": self._parse_assets_from_umm_result(georeference_result),
-                    },
-                    info=self._parse_item_name(radiance_id),
-                )
-            )
-
-        return items
-
-    # ============================================================================
-    # Retrieval operations
-    # ============================================================================
-
-    def _get_granule_by_short_name(self, item_id: str, short_name: str) -> Granule:
-        """Fetch a specific granule by ID and short_name.
-
-        Args:
-            item_id: The granule ID
-            short_name: NASA short name (e.g., "VNP02MOD")
-
-        Returns:
-            The requested granule
-
-        Raises:
-            ValueError: If granule not found
-        """
-        try:
-            results = earthaccess.search_data(
-                short_name=short_name,
-                granule_name=item_id,
-            )
-
-            if not results:
-                raise ValueError(f"No granule found with id: {item_id}")
-            item = results[0]
-
-        except Exception as e:
-            log.error(f"Failed to fetch granule {item_id}: {e}")
-            raise
-
-        item_id = item["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".nc", "")
-
-        return Granule(
-            granule_id=item_id,
-            source=self.collections[0],
-            assets=self._parse_assets_from_umm_result(item),
-            info=self._parse_item_name(item_id),
+        return ProductInfo(
+            instrument=parsed.instrument,
+            level=parsed.level,
+            product_type=parsed.product_type,
+            acquisition_time=acquisition_time,
         )
 
     def get_files(self, item: Granule) -> list[Path | str]:
@@ -316,96 +139,6 @@ class VIIRSSource(DataSource):
         if item.local_path is None:
             raise ValueError("Local path is missing. Did you download this granule?")
         return list(item.local_path.glob("*.nc"))
-
-    # ============================================================================
-    # Download operations
-    # ============================================================================
-
-    def get_downloader_init_kwargs(self) -> dict:
-        """Provide EarthData session to downloader initialization."""
-        # Only provide session if we have HTTPDownloader with EarthDataAuthenticator
-        if isinstance(self.downloader, HTTPDownloader) and isinstance(self.downloader.auth, EarthDataAuthenticator):
-            return {"session": self.downloader.auth.auth_session}
-        return {}
-
-    def download_item(self, item: Granule, destination: Path) -> bool:
-        """Download both radiance and georeference files for a VIIRS granule.
-
-        Args:
-            item: Granule to download
-            destination: Base destination directory
-
-        Returns:
-            True if both components downloaded successfully, False otherwise
-        """
-        granule_dir = destination / item.granule_id
-        granule_dir.mkdir(parents=True, exist_ok=True)
-
-        # Download 02 product (radiance)
-        radiance_asset = item.assets["radiance"]["http"]
-        # Extract original filename from URL (e.g., VNP02MOD.A2025227.1354.002.2025227231707.nc)
-        radiance_filename = Path(radiance_asset.href).name
-        radiance_file = granule_dir / radiance_filename
-
-        radiance_success = self.downloader.download(
-            uri=radiance_asset.href,
-            destination=radiance_file,
-            item_id=item.granule_id,
-        )
-
-        if not radiance_success:
-            log.warning(f"Failed to download radiance component: {item.granule_id}")
-            return False
-
-        # Download 03 product (georeference)
-        georeference_asset = item.assets["georeference"]["http"]
-        # Extract original filename from URL (e.g., VNP03MOD.A2025227.1354.002.2025227224504.nc)
-        georeference_filename = Path(georeference_asset.href).name
-        georeference_file = granule_dir / georeference_filename
-
-        georeference_success = self.downloader.download(
-            uri=georeference_asset.href,
-            destination=georeference_file,
-            item_id=item.granule_id,
-        )
-
-        if not georeference_success:
-            log.warning(f"Failed to download georeference component: {item.granule_id}")
-            return False
-
-        # Both downloads successful - save metadata
-        log.debug(f"Saving granule metadata to: {granule_dir}")
-        item.local_path = granule_dir
-        item.to_file(granule_dir)
-        return True
-
-    # ============================================================================
-    # Processing helpers (used by save_item)
-    # ============================================================================
-
-    def _filter_existing_datasets(
-        self,
-        datasets_dict: dict[str, str],
-        destination: Path,
-        granule_id: str,
-        writer: Writer,
-    ) -> dict[str, str]:
-        """Remove datasets that already exist on disk.
-
-        Args:
-            datasets_dict: Dictionary of dataset names to file names
-            destination: Base destination directory
-            granule_id: Granule identifier
-            writer: Writer instance with extension property
-
-        Returns:
-            Filtered dictionary with only non-existing datasets
-        """
-        filtered = datasets_dict.copy()
-        for dataset_name, file_name in list(datasets_dict.items()):
-            if (destination / granule_id / f"{file_name}.{writer.extension}").exists():
-                del filtered[dataset_name]
-        return filtered
 
     def _get_day_night_flag(self, files: list[Path | str]) -> str:
         """Extract day/night flag from the first file's metadata.
@@ -438,7 +171,7 @@ class VIIRSSource(DataSource):
 
         # Default to day if flag is not recognized
         if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            log.debug(f"DayNightFlag '{day_night_flag}' not recognized for {granule_id}, defaulting to 'day'")
+            log.debug("DayNightFlag '%s' not recognized for %s, defaulting to 'day'", day_night_flag, granule_id)
             day_night_flag = "day"
 
         # Map product type and day/night flag to correct composite
@@ -449,183 +182,41 @@ class VIIRSSource(DataSource):
         else:
             raise ValueError(f"Unknown product type '{product_type}' for automatic dataset selection")
 
-        log.debug(f"Automatically selected dataset: {selected_composite}")
+        log.debug("Automatically selected dataset: %s", selected_composite)
         return writer.parse_datasets(selected_composite)
 
-    def _filter_datasets_by_day_night(
-        self,
-        datasets_dict: dict[str, str],
-        day_night_flag: str,
-        granule_id: str,
-    ) -> dict[str, str]:
-        """Filter datasets that don't match the day/night condition.
+    def _get_georeference_short_name(self, radiance_short_name: str) -> str:
+        """Get VIIRS georeference short_name from radiance short_name.
+
+        VIIRS georeference products keep the product type suffix:
+        - VNP02MOD -> VNP03MOD
+        - VJ102IMG -> VJ103IMG
+        - VJ202MOD -> VJ203MOD
 
         Args:
-            datasets_dict: Dictionary of dataset names to file names
-            day_night_flag: Day/night condition flag
-            granule_id: Granule identifier for logging
+            radiance_short_name: Level 02 product short name (e.g., "VNP02MOD")
 
         Returns:
-            Filtered dictionary with only compatible datasets
+            Level 03 product short name (e.g., "VNP03MOD")
         """
-        if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            return datasets_dict
+        # Simply replace "02" with "03" in the short name
+        return radiance_short_name.replace("02", "03")
 
-        filtered = datasets_dict.copy()
-        for dataset_name in list(datasets_dict.keys()):
-            if day_night_flag not in dataset_name.lower():
-                del filtered[dataset_name]
-                log.warning(
-                    f"Skipping dataset '{dataset_name}' for granule {granule_id}: "
-                    f"dataset requires different day/night condition (data is {day_night_flag})"
-                )
-        return filtered
+    def _build_georeference_pattern(self, radiance_id: str) -> str:
+        """Build VIIRS georeference granule ID pattern.
 
-    def _write_scene_datasets(
-        self,
-        scene,
-        datasets_dict: dict[str, str],
-        destination: Path,
-        granule_id: str,
-        writer: Writer,
-    ) -> dict[str, list]:
-        """Write scene datasets to output files.
+        VIIRS georeference products keep the product type suffix:
+        - VNP02MOD.A2025227.1354.002.2025227231707 -> VNP03MOD.A2025227.1354.002.*
+        - VJ102IMG.A2025189.0000.021.2025192163307 -> VJ103IMG.A2025189.0000.021.*
 
         Args:
-            scene: Loaded and resampled scene
-            datasets_dict: Dictionary of dataset names to file names
-            destination: Base destination directory
-            granule_id: Granule identifier
-            writer: Writer instance
+            radiance_id: Radiance granule ID (e.g., "VNP02MOD.A2025227.1354.002.2025227231707")
 
         Returns:
-            Dictionary mapping granule_id to list of output paths
+            Georeference granule ID pattern with wildcard timestamp
         """
-        paths: dict[str, list] = defaultdict(list)
-        output_dir = destination / granule_id
-        output_dir.mkdir(exist_ok=True, parents=True)
-
-        for dataset_name, file_name in datasets_dict.items():
-            output_path = output_dir / f"{file_name}.{writer.extension}"
-            paths[granule_id].append(
-                writer.write(
-                    dataset=cast(DataArray, scene[dataset_name]),
-                    output_path=output_path,
-                )
-            )
-
-        return paths
-
-    # ============================================================================
-    # Processing operations
-    # ============================================================================
-
-    def save_item(
-        self,
-        item: Granule,
-        destination: Path,
-        writer: Writer,
-        params: ConversionParams,
-        force: bool = False,
-    ) -> dict[str, list]:
-        """Save granule item to output files after processing.
-
-        Args:
-            item: Granule to process
-            destination: Base destination directory
-            writer: Writer instance for output
-            params: Conversion parameters
-            force: If True, overwrite existing files
-
-        Returns:
-            Dictionary mapping granule_id to list of output paths
-        """
-        # Validate inputs
-        if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-
-        if params.datasets is None and self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
-
-        # Parse and validate datasets
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
-        log.debug("Attempting to save the following datasets: %s", datasets_dict)
-
-        # Check for automatic dataset selection
-        auto_select = False
-        automatic_keys = [key for key in datasets_dict.keys() if key.lower() == "automatic"]
-
-        if automatic_keys:
-            if len(datasets_dict) > 1:
-                raise ValueError(
-                    "Cannot mix 'automatic' with other datasets. "
-                    "Either use 'automatic' alone or specify explicit datasets."
-                )
-            auto_select = True
-            log.debug("Automatic dataset selection enabled")
-
-        # Skip existing files unless forced
-        if not force:
-            datasets_dict = self._filter_existing_datasets(datasets_dict, destination, item.granule_id, writer)
-
-        # Early return if no datasets to process
-        if not datasets_dict:
-            log.debug("All datasets already exist for %s, skipping", item.granule_id)
-            return {item.granule_id: []}
-
-        # Get files and extract day/night flag
-        files = self.get_files(item)
-        log.debug("Found %d files to process", len(files))
-        day_night_flag = self._get_day_night_flag(files)
-
-        # Handle dataset selection based on mode
-        if auto_select:
-            datasets_dict = self._select_automatic_dataset(item.granule_id, day_night_flag, writer)
-        else:
-            datasets_dict = self._filter_datasets_by_day_night(datasets_dict, day_night_flag, item.granule_id)
-            if not datasets_dict:
-                log.warning(
-                    "All datasets incompatible with day/night flag (%s) for %s, skipping",
-                    day_night_flag,
-                    item.granule_id,
-                )
-                return {item.granule_id: []}
-
-        # Load and resample scene
-        log.debug("Loading and resampling scene")
-        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-
-        # Define area based on user params or scene extent
-        if params.area_geometry is not None:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-
-        scene = self.resample(scene, area_def=area_def)
-
-        # Write datasets to output
-        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
-
-    def validate(self, item: Granule) -> None:
-        """Validate a VIIRS granule.
-
-        Args:
-            item: Granule to validate
-
-        Raises:
-            NotImplementedError: Validation not yet implemented for VIIRS
-        """
-        raise NotImplementedError("Not implemented for VIIRS yet.")
+        parsed = self._parse_granule_id(radiance_id)
+        return f"{parsed.instrument}03{parsed.product_type}.{parsed.date}.{parsed.time}.{parsed.version}.*"
 
 
 class VIIRSL1BSource(VIIRSSource):
@@ -660,8 +251,16 @@ class VIIRSL1BSource(VIIRSSource):
         downloader: Downloader,
         satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
+        """Initialize VIIRS Level 1B data source.
+
+        Args:
+            downloader (Downloader): Downloader instance for file retrieval
+            satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
+            product_type (list[Literal["mod", "img"]]): List of product types to search
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+        """
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []
         for sat, prod in product(satellite, product_type):
@@ -724,6 +323,20 @@ class VIIRSL1BSource(VIIRSSource):
         return all_items
 
     def get_by_id(self, item_id: str, **_kwargs) -> Granule:
+        """Get specific VIIRS granule by ID.
+
+        Automatically detects the short_name from the granule ID format.
+
+        Args:
+            item_id (str): Granule identifier (e.g., "VNP02MOD.A2025227.1354.002.2025227231707")
+            **_kwargs: Additional keyword arguments (unused)
+
+        Returns:
+            Granule: Requested granule with metadata
+
+        Raises:
+            ValueError: If granule ID format is invalid or not in configured combinations
+        """
         # Parse the granule_id to determine which combination it belongs to
         try:
             parsed = self._parse_granule_id(item_id)
@@ -747,21 +360,8 @@ class VIIRSL1BSource(VIIRSSource):
             log.debug("Auto-detected short_name '%s' from granule_id '%s'", short_name, item_id)
 
         except Exception as e:
-            log.error(f"Failed to parse granule_id '{item_id}': {e}")
+            log.error("Failed to parse granule_id '%s': %s", item_id, e)
             raise ValueError(f"Invalid granule ID format: {item_id}") from e
 
         # Use the helper method with the determined short_name
         return self._get_granule_by_short_name(item_id, short_name)
-
-    def _parse_item_name(self, name: str) -> ProductInfo:
-        parsed = self._parse_granule_id(name)
-        # Date format: A2025189 -> need to strip 'A' prefix for datetime parsing
-        date_str = parsed.date[1:]  # Remove 'A' prefix
-        acquisition_time = datetime.strptime(f"{date_str}{parsed.time}", "%Y%j%H%M").replace(tzinfo=timezone.utc)
-
-        return ProductInfo(
-            instrument=parsed.instrument,
-            level=parsed.level,
-            product_type=parsed.product_type,
-            acquisition_time=acquisition_time,
-        )

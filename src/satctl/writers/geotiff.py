@@ -25,6 +25,14 @@ class GeoTIFFWriter(Writer):
         dtype: Any | None = None,
         fill_value: Any = None,
     ):
+        """Initialize GeoTIFF writer.
+
+        Args:
+            compress (str): Compression method. Defaults to 'lzw'.
+            tiled (bool): Whether to create tiled GeoTIFF. Defaults to True.
+            dtype (Any | None): Output data type. Defaults to None (use source dtype).
+            fill_value (Any): No-data fill value. Defaults to None (auto-determined).
+        """
         super().__init__(extension="tif")
         self.compress = compress
         self.tiled = tiled
@@ -32,6 +40,14 @@ class GeoTIFFWriter(Writer):
         self.fill_value = fill_value
 
     def _get_transform_gcps(self, data_arr: DataArray) -> tuple[CRS | None, Affine | None, Any]:
+        """Extract CRS, transform, and GCPs from DataArray.
+
+        Args:
+            data_arr (DataArray): Input data array with area attribute
+
+        Returns:
+            tuple[CRS | None, Affine | None, Any]: Tuple of (CRS, transform, GCPs)
+        """
         crs = None
         transform = None
         gcps = None
@@ -48,7 +64,7 @@ class GeoTIFFWriter(Writer):
                 west, south, east, north = area.area_extent
                 height, width = area.shape
                 transform = rasterio.transform.from_bounds(west, south, east, north, width, height)
-                log.debug(f"Created transform from AreaDefinition: {transform}")
+                log.debug("Created transform from AreaDefinition: %s", transform)
 
         except (KeyError, AttributeError):
             # Fall back to SwathDefinition (irregular grid with GCPs)
@@ -58,7 +74,7 @@ class GeoTIFFWriter(Writer):
                     gcps = area.lons.attrs.get("gcps")
                     crs = area.lons.attrs.get("crs")
                     if gcps and crs:
-                        log.debug(f"Using GCPs from SwathDefinition: {len(gcps)} points")
+                        log.debug("Using GCPs from SwathDefinition: %s points", len(gcps))
             except (KeyError, AttributeError):
                 log.warning("Couldn't extract geospatial information from DataArray")
 
@@ -72,7 +88,22 @@ class GeoTIFFWriter(Writer):
         dtype: Any,
         crs: CRS | None,
         transform: Affine | None,
-    ):
+        fill_value: Any = None,
+    ) -> dict[str, Any]:
+        """Create rasterio profile dictionary.
+
+        Args:
+            height (int): Image height in pixels
+            width (int): Image width in pixels
+            bands (int): Number of bands
+            dtype (Any): Data type
+            crs (CRS | None): Coordinate reference system
+            transform (Affine | None): Affine transform
+            fill_value (Any): No-data value. Defaults to None.
+
+        Returns:
+            dict[str, Any]: Rasterio profile dictionary
+        """
         return {
             "driver": "GTiff",
             "height": height,
@@ -83,20 +114,33 @@ class GeoTIFFWriter(Writer):
             "transform": transform,
             "compress": self.compress,
             "tiled": self.tiled,
-            "nodata": self.fill_value,
+            "nodata": fill_value,
         }
 
     def write(
         self,
         dataset: DataArray,
         output_path: Path,
-        **tags,
-    ) -> None:
-        """
-        Write scene composite to GeoTIFF.
+        **tags: Any,
+    ) -> Path:
+        """Write DataArray to GeoTIFF file.
+
+        Args:
+            dataset (DataArray): Data array to write
+            output_path (Path): Output file path
+            **tags (Any): Additional metadata tags to write
+
+        Returns:
+            Path: Output file path
+
+        Raises:
+            FileNotFoundError: If output parent directory doesn't exist or is invalid
+            ValueError: If data dimensions are unsupported
         """
         if not output_path.parent.exists() or output_path.is_dir():
-            raise FileNotFoundError(f"Invalid directory {output_path.parent}")
+            raise FileNotFoundError(
+                f"Invalid output path: parent directory '{output_path.parent}' does not exist or path is a directory"
+            )
         crs, transform, gcps = self._get_transform_gcps(dataset)
         # Prepare data
         data = dataset.values
@@ -112,13 +156,14 @@ class GeoTIFFWriter(Writer):
                     data = np.transpose(data, axes)
             num_bands = dataset.shape[0]
         else:
-            raise ValueError(f"Unsupported data dimensions: {dataset.shape}")
+            raise ValueError(f"Unsupported data dimensions: {dataset.shape} (expected 2D or 3D array)")
         height, width = dataset.shape[-2:]
 
         # determine dtype and fill_value
         dtype = self.dtype or dataset.dtype
-        if self.fill_value is None and np.issubdtype(dtype, np.floating):
-            self.fill_value = np.nan
+        fill_value = self.fill_value
+        if fill_value is None and np.issubdtype(dtype, np.floating):
+            fill_value = np.nan
 
         # get band names
         band_names = []
@@ -128,7 +173,7 @@ class GeoTIFFWriter(Writer):
             band_names = [f"band_{i + 1}" for i in range(num_bands)]
 
         # add GCPs if available (for swath data)
-        profile = self._create_profile(height, width, num_bands, dtype, crs, transform)
+        profile = self._create_profile(height, width, num_bands, dtype, crs, transform, fill_value)
         if gcps is not None and crs is not None:
             profile["gcps"] = gcps
             profile.pop("transform", None)
@@ -150,3 +195,4 @@ class GeoTIFFWriter(Writer):
             dst.update_tags(**tags)
 
         log.debug("Successfully saved: %s", output_path)
+        return output_path

@@ -11,6 +11,13 @@ from satctl.progress.events import emit_event
 
 log = logging.getLogger(__name__)
 
+# HTTP downloader configuration defaults
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_CHUNK_SIZE = 8192  # 8KB
+DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_POOL_CONNECTIONS = 10
+DEFAULT_POOL_MAX_SIZE = 2
+
 
 class HTTPDownloader(Downloader):
     """HTTP downloader with authentication, retries, and progress reporting."""
@@ -18,12 +25,22 @@ class HTTPDownloader(Downloader):
     def __init__(
         self,
         authenticator: Authenticator,
-        max_retries: int = 3,
-        chunk_size: int = 8192,
-        timeout: int = 30,
-        pool_connections: int = 10,
-        pool_maxsize: int = 2,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        timeout: int = DEFAULT_TIMEOUT_SECONDS,
+        pool_connections: int = DEFAULT_POOL_CONNECTIONS,
+        pool_maxsize: int = DEFAULT_POOL_MAX_SIZE,
     ):
+        """Initialize HTTP downloader.
+
+        Args:
+            authenticator (Authenticator): Authenticator instance
+            max_retries (int): Maximum download retry attempts. Defaults to 3.
+            chunk_size (int): Download chunk size in bytes. Defaults to 8192.
+            timeout (int): Request timeout in seconds. Defaults to 30.
+            pool_connections (int): Connection pool size. Defaults to 10.
+            pool_maxsize (int): Maximum pool size. Defaults to 2.
+        """
         super().__init__(authenticator)
         self.max_retries = max_retries
         self.chunk_size = chunk_size
@@ -31,7 +48,13 @@ class HTTPDownloader(Downloader):
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
 
-    def init(self, session: requests.Session | None = None, **kwargs) -> None:
+    def init(self, session: requests.Session | None = None, **kwargs: requests.Session) -> None:
+        """Initialize HTTP session.
+
+        Args:
+            session (requests.Session | None): Optional pre-configured session. Defaults to None.
+            **kwargs (requests.Session): Additional keyword arguments (unused)
+        """
         if not session:
             session = requests.Session()
             adapter = HTTPAdapter(pool_connections=self.pool_conns, pool_maxsize=self.pool_size)
@@ -45,8 +68,15 @@ class HTTPDownloader(Downloader):
         destination: Path,
         item_id: str,
     ) -> bool:
-        """
-        Download file from HTTP URL with retries and progress reporting.
+        """Download file from HTTP URL with retries and progress reporting.
+
+        Args:
+            uri (str): HTTP URL to download from
+            destination (Path): Local file path to save to
+            item_id (str): Identifier used for progress tracking events
+
+        Returns:
+            bool: True if download succeeded, False otherwise
         """
         error = ""
         task_id = f"download_{item_id}"
@@ -57,11 +87,11 @@ class HTTPDownloader(Downloader):
             try:
                 # Ensure we have authentication
                 if not self.auth.ensure_authenticated():
-                    log.error(f"Authentication failed on attempt {attempt + 1}")
+                    log.error("Authentication failed on attempt %s", attempt + 1)
                     continue
 
                 headers = self.auth.auth_headers
-                log.debug(f"Downloading {uri} (attempt {attempt + 1}/{self.max_retries})")
+                log.debug("Downloading %s (attempt %s/%s)", uri, attempt + 1, self.max_retries)
                 response = self.session.get(uri, headers=headers, stream=True, timeout=self.timeout)
 
                 if response.status_code == 401:
@@ -86,18 +116,18 @@ class HTTPDownloader(Downloader):
                             downloaded_bytes += len(chunk)
                             emit_event(ProgressEventType.TASK_PROGRESS, task_id=task_id, advance=len(chunk))
 
-                log.debug(f"Successfully downloaded {uri} ({downloaded_bytes} bytes)")
+                log.debug("Successfully downloaded %s (%s bytes)", uri, downloaded_bytes)
                 emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
                 return True
 
             except requests.exceptions.Timeout:
-                log.debug(f"Timeout downloading {uri} on attempt {attempt + 1}")
+                log.debug("Timeout downloading %s on attempt %s", uri, attempt + 1)
                 error = "timed out"
             except requests.exceptions.RequestException as e:
-                log.debug(f"Request error downloading {uri} on attempt {attempt + 1}: {e}")
+                log.debug("Request error downloading %s on attempt %s: %s", uri, attempt + 1, e)
                 error = "exception request"
             except Exception as e:
-                log.warning(f"Unexpected error downloading {uri} on attempt {attempt + 1}: {type(e)} - {e}")
+                log.warning("Unexpected error downloading %s on attempt %s: %s - %s", uri, attempt + 1, type(e), e)
                 error = str(e)
         emit_event(
             ProgressEventType.TASK_COMPLETED,
@@ -108,5 +138,6 @@ class HTTPDownloader(Downloader):
         return False
 
     def close(self) -> None:
+        """Close HTTP session and release resources."""
         if self.session:
             self.session.close()

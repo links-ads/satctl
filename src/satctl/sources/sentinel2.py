@@ -2,7 +2,6 @@ import logging
 import re
 import warnings
 from abc import abstractmethod
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -10,7 +9,6 @@ from typing import Any, cast
 from pydantic import BaseModel
 from pystac_client import Client
 from satpy.scene import Scene
-from xarray import DataArray
 
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
@@ -18,6 +16,9 @@ from satctl.sources import DataSource
 from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_SEARCH_LIMIT = 100
 
 
 class S2Asset(BaseModel):
@@ -63,10 +64,23 @@ class Sentinel2Source(DataSource):
         stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-2 source.
+
+        Args:
+            collection_name (str): Collection name identifier
+            reader (str): Satpy reader name
+            downloader (Downloader): Downloader instance
+            stac_url (str): STAC catalog URL
+            default_composite (str | None): Default composite name. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum search results. Defaults to 100.
+            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
+            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
+        """
         super().__init__(
             collection_name,
             downloader=downloader,
@@ -81,9 +95,26 @@ class Sentinel2Source(DataSource):
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     @abstractmethod
-    def _parse_item_name(self, name: str) -> ProductInfo: ...
+    def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse item name into ProductInfo.
+
+        Args:
+            name (str): Item name to parse
+
+        Returns:
+            ProductInfo: ProductInfo with extracted metadata
+        """
+        ...
 
     def search(self, params: SearchParams) -> list[Granule]:
+        """Search for Sentinel-2 granules via STAC catalog.
+
+        Args:
+            params (SearchParams): Search parameters including time range and area
+
+        Returns:
+            list[Granule]: List of matching granules
+        """
         log.debug("Setting up the STAC client")
         catalogue = Client.open(self.stac_url)
 
@@ -96,22 +127,51 @@ class Sentinel2Source(DataSource):
         )
         items = [
             Granule(
-                granule_id=i.id,
+                granule_id=stac_item.id,
                 source=self.collections[0],
-                assets={k: S2Asset(href=v.href, media_type=v.media_type) for k, v in i.assets.items()},
-                info=self._parse_item_name(i.id),
+                assets={
+                    asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
+                    for asset_name, asset in stac_item.assets.items()
+                },
+                info=self._parse_item_name(stac_item.id),
             )
-            for i in search.items()
+            for stac_item in search.items()
         ]
         log.debug("Found %d items", len(items))
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str, **kwargs: Any) -> Granule:
+        """Retrieve a specific granule by ID.
+
+        Args:
+            item_id (str): Granule identifier
+            **kwargs (Any): Additional keyword arguments
+
+        Returns:
+            Granule: The requested granule
+
+        Raises:
+            NotImplementedError: Method not yet implemented
+        """
         raise NotImplementedError()
 
     def get_files(self, item: Granule) -> list[Path | str]:
+        """Get list of files from SAFE structure.
+
+        Args:
+            item (Granule): Granule with local_path set
+
+        Returns:
+            list[Path | str]: List of all files in SAFE structure
+
+        Raises:
+            ValueError: If local_path is None or SAFE structure is invalid
+        """
         if item.local_path is None:
-            raise ValueError("Local path is missing. Did you download this granule?")
+            raise ValueError(
+                f"Resource not found: granule '{item.granule_id}' has no local_path "
+                "(download the granule first using download_item())"
+            )
         # Check if SAFE structure exists
         granule_dir = item.local_path / "GRANULE"
         manifest_file = item.local_path / "manifest.safe"
@@ -124,13 +184,19 @@ class Sentinel2Source(DataSource):
             all_files = [f for f in all_files if f.name != "_granule.json"]
             return all_files
         else:
-            raise ValueError("SAFE structure not found")
+            raise ValueError(
+                f"Invalid data: SAFE structure not found in '{item.local_path}' "
+                "(expected GRANULE directory and manifest.safe file)"
+            )
 
     def validate(self, item: Granule) -> None:
-        """Validates a Sentinel2 STAC item.
+        """Validate a Sentinel-2 STAC item.
 
         Args:
             item (Granule): STAC item to validate
+
+        Raises:
+            AssertionError: If asset media types are invalid
         """
         for name, asset in item.assets.items():
             asset = cast(S2Asset, asset)
@@ -150,23 +216,28 @@ class Sentinel2Source(DataSource):
         datasets: list[str] | None = None,
         generate: bool = False,
         calibration: str = "counts",
-        **scene_options: dict[str, Any],
+        **scene_options: Any,
     ) -> Scene:
         """Load a Sentinel-2 scene with specified calibration.
 
         Args:
             item (Granule): Granule to load
-            datasets (list[str] | None): List of datasets/composites to load
-            generate (bool): Whether to generate composites
-            calibration (str): Calibration type - 'counts' (DN 0-10000, default) or 'reflectance' (percentage 0-100%)
-            **scene_options: Additional scene options
+            datasets (list[str] | None): List of datasets/composites to load. Defaults to None.
+            generate (bool): Whether to generate composites. Defaults to False.
+            calibration (str): Calibration type - 'counts' (DN 0-10000) or 'reflectance' (percentage 0-100%). Defaults to 'counts'.
+            **scene_options (Any): Additional keyword arguments passed to Scene reader
 
         Returns:
             Scene: Loaded satpy Scene object
+
+        Raises:
+            ValueError: If datasets is None and no default_composite is set
         """
         if not datasets:
             if self.default_composite is None:
-                raise ValueError("Please provide the source with a default composite, or provide custom composites")
+                raise ValueError(
+                    "Invalid configuration: datasets parameter is required when no default composite is set"
+                )
             datasets = [self.default_composite]
         scene = Scene(
             filenames=self.get_files(item),
@@ -178,18 +249,19 @@ class Sentinel2Source(DataSource):
         return scene
 
     def download_item(self, item: Granule, destination: Path) -> bool:
-        """Download only the specified assets to destination/item.granule_id.
+        """Download required assets preserving SAFE directory structure.
 
         Args:
-            item (Granule): Sentinel-2 MSI product to download.
-            destination (Path): Path to the destination directory.
+            item (Granule): Sentinel-2 MSI product to download
+            destination (Path): Base destination directory
 
         Returns:
-            bool: True if all specified assets were downloaded successfully, False otherwise.
+            bool: True if all specified assets were downloaded successfully, False otherwise
         """
         self.validate(item)
 
-        # Create directory with .SAFE extension for msi_safe reader compatibility
+        # Satpy's msi_safe/msi_safe_l2a reader expects the standard SAFE directory structure
+        # SAFE (Standard Archive Format for Europe) format requires .SAFE extension
         local_path = destination / f"{item.granule_id}.SAFE"
         local_path.mkdir(parents=True, exist_ok=True)
 
@@ -266,56 +338,37 @@ class Sentinel2Source(DataSource):
         params: ConversionParams,
         force: bool = False,
     ) -> dict[str, list]:
-        if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-        if params.datasets is None and self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
+        """Save granule item to output files after processing.
 
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
-        log.debug("Attempting to save the following datasets: %s", datasets_dict)
-        # if not forced or already present,
-        # remove existing files from the process before loading scene
-        if not force:
-            for dataset_name, file_name in list(datasets_dict.items()):
-                if (destination / item.granule_id / f"{file_name}.{writer.extension}").exists():
-                    del datasets_dict[dataset_name]
+        Args:
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
 
-        files = self.get_files(item)
-        log.debug("Found %d files to process", len(files))
+        Returns:
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
+        """
+        # Validate inputs using base class helper
+        self._validate_save_inputs(item, params)
 
+        # Parse datasets using base class helper
+        datasets_dict = self._prepare_datasets(writer, params)
+
+        # Filter existing files using base class helper
+        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
+
+        # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-        # if user does not provide an AoI, we use the entire granule extent
-        # similarly, if a user does not provide: source CRS, resolution, datasets,
-        # `define_area` will assume some sane defaults (4326, default_res or finest, default_composite)
-        if params.area_geometry is not None:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
+
+        # Define area using base class helper
+        area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
 
-        paths: dict[str, list] = defaultdict(list)
-        output_dir = destination / item.granule_id
-        output_dir.mkdir(exist_ok=True, parents=True)
-        for dataset_name, file_name in datasets_dict.items():
-            output_path = output_dir / f"{file_name}.{writer.extension}"
-            paths[item.granule_id].append(
-                writer.write(
-                    dataset=cast(DataArray, scene[dataset_name]),
-                    output_path=output_path,
-                )
-            )
-        return paths
+        # Write datasets using base class helper
+        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
 
 
 class Sentinel2L2ASource(Sentinel2Source):
@@ -352,11 +405,22 @@ class Sentinel2L2ASource(Sentinel2Source):
         downloader: Downloader,
         stac_url: str,
         default_composite: str = "true_color",
-        default_resolution=10,
+        default_resolution: int = 10,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-2 L2A source.
+
+        Args:
+            downloader (Downloader): Downloader instance
+            stac_url (str): STAC catalog URL
+            default_composite (str): Default composite name. Defaults to 'true_color'.
+            default_resolution (int): Default resolution in meters. Defaults to 10.
+            search_limit (int): Maximum search results. Defaults to 100.
+            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
+            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
+        """
         super().__init__(
             "sentinel-2-l2a",
             reader="msi_safe_l2a",
@@ -370,10 +434,23 @@ class Sentinel2L2ASource(Sentinel2Source):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse Sentinel-2 L2A item name.
+
+        Args:
+            name (str): Item name to parse
+
+        Returns:
+            ProductInfo: Extracted product information
+
+        Raises:
+            ValueError: If name doesn't match L2A pattern
+        """
         pattern = r"S2([ABC])_MSIL2A_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid Sentinel-2 L2A filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match Sentinel-2 L2A pattern (S2X_MSIL2A_YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[1], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
@@ -418,11 +495,22 @@ class Sentinel2L1CSource(Sentinel2Source):
         downloader: Downloader,
         stac_url: str,
         default_composite: str = "true_color",
-        default_resolution=10,
+        default_resolution: int = 10,
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
     ):
+        """Initialize Sentinel-2 L1C source.
+
+        Args:
+            downloader (Downloader): Downloader instance
+            stac_url (str): STAC catalog URL
+            default_composite (str): Default composite name. Defaults to 'true_color'.
+            default_resolution (int): Default resolution in meters. Defaults to 10.
+            search_limit (int): Maximum search results. Defaults to 100.
+            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
+            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
+        """
         super().__init__(
             "sentinel-2-l1c",
             reader="msi_safe",
@@ -436,10 +524,23 @@ class Sentinel2L1CSource(Sentinel2Source):
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
+        """Parse Sentinel-2 L1C item name.
+
+        Args:
+            name (str): Item name to parse
+
+        Returns:
+            ProductInfo: Extracted product information
+
+        Raises:
+            ValueError: If name doesn't match L1C pattern
+        """
         pattern = r"S2([ABC])_MSIL1C_(\d{8}T\d{6})"
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(f"Invalid Sentinel-2 L1C filename format: {name}")
+            raise ValueError(
+                f"Invalid filename format: '{name}' does not match Sentinel-2 L1C pattern (S2X_MSIL1C_YYYYMMDDTHHMMSS)"
+            )
 
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[1], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)

@@ -12,8 +12,19 @@ from shapely import GeometryCollection, Polygon, from_geojson
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+# Constants
+GRANULE_METADATA_FILENAME = "_granule.json"
+
 
 def convert_to_geojson(value: Any) -> Any:
+    """Convert Shapely geometry to GeoJSON format for validation.
+
+    Args:
+        value (Any): Value to convert, either Shapely geometry or already GeoJSON
+
+    Returns:
+        Any: GeoJSON representation if Shapely, otherwise value as-is
+    """
     # shapely -> geojson before validating
     if isinstance(value, BaseGeometry):
         return value.__geo_interface__
@@ -22,6 +33,17 @@ def convert_to_geojson(value: Any) -> Any:
 
 
 def validate_crs(value: Any) -> Any:
+    """Validate and normalize CRS value to string representation.
+
+    Args:
+        value (Any): CRS value to validate, can be CRS object, string, or None
+
+    Returns:
+        Any: String representation of CRS, or None if value was None
+
+    Raises:
+        ValueError: If value is not a valid CRS
+    """
     if value is None:
         return value
     # if already a CRS instance, dump it
@@ -32,7 +54,7 @@ def validate_crs(value: Any) -> Any:
         CRS.from_string(value)
         return value
     except CRSError:
-        raise ValueError(f"Invalid CRS: {value}")
+        raise ValueError(f"Invalid CRS: '{value}' (expected EPSG code like 'EPSG:4326' or valid proj string)")
 
 
 class AreaParams(BaseModel):
@@ -42,19 +64,44 @@ class AreaParams(BaseModel):
 
     @classmethod
     def _load_geometry(cls, path: Path) -> dict:
+        """Load geometry data from GeoJSON file.
+
+        Args:
+            path (Path): Path to GeoJSON file
+
+        Returns:
+            dict: Parsed GeoJSON data
+
+        Raises:
+            ValueError: If path is None, doesn't exist, or is not a file
+        """
         if path is None:
-            raise ValueError("Area file must be provided in `from_file`")
+            raise ValueError("Invalid configuration: area file path is required for from_file()")
         if not path.exists() or not path.is_file():
-            raise ValueError(f"Invalid area file: {path}")
+            raise ValueError(f"Resource not found: area file '{path}' does not exist or is not a file")
         data = json.loads(path.read_text())
         return data
 
     @classmethod
     def from_file(cls, path: Path, **kwargs) -> "AreaParams":
+        """Create AreaParams from GeoJSON file.
+
+        Args:
+            path (Path): Path to GeoJSON file
+            **kwargs: Additional keyword arguments (unused)
+
+        Returns:
+            AreaParams: New instance with loaded geometry
+        """
         return cls(area=cls._load_geometry(path))  # type:ignore
 
     @property
     def area_geometry(self) -> Polygon | None:
+        """Convert area to Shapely Polygon geometry.
+
+        Returns:
+            Polygon | None: Shapely polygon from area, or None if no area defined
+        """
         if self.area is None:
             return None
         # this is absurd, but it's the only way to validate inputs
@@ -75,12 +122,31 @@ class SearchParams(AreaParams):
 
     @model_validator(mode="after")
     def validate_dates(self):
+        """Validate that start date is before end date.
+
+        Returns:
+            SearchParams: Self for chaining
+
+        Raises:
+            ValueError: If start date is not before end date
+        """
         if self.start >= self.end:
-            raise ValueError(f"Start date {self.start} comes after end date {self.end}")
+            raise ValueError(f"Invalid date range: start ({self.start}) must be before end ({self.end})")
         return self
 
     @classmethod
     def from_file(cls, path: Path, *, start: datetime, end: datetime, **kwargs) -> "SearchParams":
+        """Create SearchParams from GeoJSON file with date range.
+
+        Args:
+            path (Path): Path to GeoJSON file
+            start (datetime): Start of time range
+            end (datetime): End of time range
+            **kwargs: Additional keyword arguments (unused)
+
+        Returns:
+            SearchParams: New instance with loaded geometry and dates
+        """
         return cls(area=cls._load_geometry(path), start=start, end=end)  # type:ignore
 
 
@@ -101,6 +167,19 @@ class ConversionParams(AreaParams):
         resolution: int | None = None,
         **kwargs,
     ) -> "ConversionParams":
+        """Create ConversionParams from GeoJSON file with processing parameters.
+
+        Args:
+            path (Path): Path to GeoJSON file
+            target_crs (str | CRS): Target coordinate reference system
+            source_crs (str | CRS | None): Source coordinate reference system. Defaults to None.
+            datasets (list[str] | None): List of dataset names to process. Defaults to None.
+            resolution (int | None): Output resolution. Defaults to None.
+            **kwargs: Additional keyword arguments (unused)
+
+        Returns:
+            ConversionParams: New instance with loaded geometry and conversion settings
+        """
         if isinstance(target_crs, CRS):
             target_crs = target_crs.to_string()
         if source_crs and isinstance(source_crs, CRS):
@@ -115,11 +194,21 @@ class ConversionParams(AreaParams):
 
     @property
     def target_crs_obj(self) -> CRS:
+        """Get target CRS as pyproj CRS object.
+
+        Returns:
+            CRS: Target coordinate reference system object
+        """
         # forced to string by validator
         return CRS.from_string(cast(str, self.target_crs))
 
     @property
     def source_crs_obj(self) -> CRS | None:
+        """Get source CRS as pyproj CRS object.
+
+        Returns:
+            CRS | None: Source coordinate reference system object, or None if not set
+        """
         # forced to string by validator
         return CRS.from_string(cast(str, self.source_crs)) if self.source_crs else None
 
@@ -140,12 +229,25 @@ class Granule(BaseModel):
 
     @classmethod
     def from_file(cls, path: Path) -> "Granule":
-        file_path = path / "_granule.json"
+        """Load granule metadata from file.
+
+        Args:
+            path (Path): Directory containing granule metadata file
+
+        Returns:
+            Granule: Loaded granule instance
+        """
+        file_path = path / GRANULE_METADATA_FILENAME
         with open(file_path, "r") as f:
             return cls.model_validate_json(f.read())
 
     def to_file(self, path: Path) -> None:
-        file_path = path / "_granule.json"
+        """Save granule metadata to file.
+
+        Args:
+            path (Path): Directory where metadata file will be written
+        """
+        file_path = path / GRANULE_METADATA_FILENAME
         with open(file_path, "w") as f:
             f.write(self.model_dump_json(indent=2))
 

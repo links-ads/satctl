@@ -5,7 +5,9 @@ description = "Toolkit to search, download and process Earth Observation data"
 readme = "README.md"
 authors = [
     { name = "Edoardo Arnaudo", email = "edoardo.arnaudo@linksfoundation.com" },
-    { name = "Andrea Bragagnolo", email = "andrea.bragagnolo@linksfoundation.com" },
+    { name = "Luca Barco", email = "andrea.bragagnolo@linksfoundation.com" },
+    { name = "Andrea Bragagnolo", email = "luca.barco@linksfoundation.com" },
+    { name = "Gaetano Chiriaco", email = "gaetano.chiriaco@linksfoundation.com" },
 ]
 requires-python = ">=3.10"
 dependencies = [

@@ -11,6 +11,10 @@ from satctl.progress.events import emit_event
 
 log = logging.getLogger(__name__)
 
+# S3 downloader configuration defaults
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_CHUNK_SIZE = 8192  # 8KB
+
 
 class S3Downloader(Downloader):
     """S3 downloader with authentication, retries, and progress reporting."""
@@ -18,20 +22,19 @@ class S3Downloader(Downloader):
     def __init__(
         self,
         authenticator: Authenticator,
-        max_retries: int = 3,
-        chunk_size: int = 8192,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
         endpoint_url: str | None = None,
         region_name: str | None = None,
     ):
-        """
-        Initialize S3 downloader.
+        """Initialize S3 downloader.
 
         Args:
-            authenticator: Authenticator instance for S3 credentials
-            max_retries: Maximum number of download attempts
-            chunk_size: Size of chunks to read when downloading
-            endpoint_url: Optional custom S3 endpoint URL (e.g., for Copernicus Data Space)
-            region_name: AWS region name (defaults to None for custom endpoints)
+            authenticator (Authenticator): Authenticator instance for S3 credentials
+            max_retries (int): Maximum number of download attempts. Defaults to 3.
+            chunk_size (int): Size of chunks to read when downloading. Defaults to 8192.
+            endpoint_url (str | None): Optional custom S3 endpoint URL. Defaults to None.
+            region_name (str | None): AWS region name. Defaults to None.
         """
         super().__init__(authenticator)
         self.max_retries = max_retries
@@ -41,10 +44,14 @@ class S3Downloader(Downloader):
         self.s3_client = None
 
     def init(self) -> None:
-        """Initialize S3 client with authentication."""
+        """Initialize S3 client with authentication.
+
+        Raises:
+            RuntimeError: If authentication fails
+        """
         # Ensure authentication is valid
         if not self.auth.ensure_authenticated():
-            raise RuntimeError("Failed to authenticate for S3 access")
+            raise RuntimeError("Failed to initialize S3 downloader: authentication failed")
 
         # Get session from authenticator if available
         session = self.auth.auth_session if hasattr(self.auth, "auth_session") else None
@@ -65,7 +72,7 @@ class S3Downloader(Downloader):
                     f"Initialized S3 client from authenticator session with endpoint: {endpoint_url or 'default'}"
                 )
             except Exception as e:
-                log.warning(f"Failed to create S3 client from session: {e}")
+                log.warning("Failed to create S3 client from session: %s", e)
                 self.s3_client = None
 
         if not self.s3_client:
@@ -77,27 +84,28 @@ class S3Downloader(Downloader):
                 kwargs["region_name"] = self.region_name
 
             self.s3_client = boto3.client("s3", **kwargs)
-            log.debug(f"Initialized S3 client with endpoint: {endpoint_url or 'default'}")
+            log.debug("Initialized S3 client with endpoint: %s", endpoint_url or "default")
 
     def _parse_s3_uri(self, uri: str) -> tuple[str, str]:
-        """
-        Parse S3 URI into bucket and key.
+        """Parse S3 URI into bucket and key.
 
         Args:
-            uri: S3 URI in format s3://bucket/key/path
+            uri (str): S3 URI in format s3://bucket/key/path
 
         Returns:
-            Tuple of (bucket_name, object_key)
+            tuple[str, str]: Tuple of (bucket_name, object_key)
+
+        Raises:
+            ValueError: If URI format is invalid
         """
         if not uri.startswith("s3://"):
-            raise ValueError(f"Invalid S3 URI format: {uri}")
+            raise ValueError(f"Invalid S3 URI: '{uri}' (expected format: s3://bucket/key/path)")
 
-        # Remove s3:// prefix
         path = uri[5:]
         parts = path.split("/", 1)
 
         if len(parts) != 2:
-            raise ValueError(f"Invalid S3 URI format: {uri}")
+            raise ValueError(f"Invalid S3 URI: '{uri}' (must include both bucket and key)")
 
         bucket = parts[0]
         key = parts[1]
@@ -110,16 +118,15 @@ class S3Downloader(Downloader):
         destination: Path,
         item_id: str,
     ) -> bool:
-        """
-        Download file from S3 URI with retries and progress reporting.
+        """Download file from S3 URI with retries and progress reporting.
 
         Args:
-            uri: S3 URI (e.g., s3://bucket/path/to/file)
-            destination: Local path to save the downloaded file
-            item_id: Identifier for progress tracking
+            uri (str): S3 URI (e.g., s3://bucket/path/to/file)
+            destination (Path): Local path to save the downloaded file
+            item_id (str): Identifier for progress tracking
 
         Returns:
-            True if download succeeded, False otherwise
+            bool: True if download succeeded, False otherwise
         """
         if not self.s3_client:
             log.error("S3 client not initialized. Call init() first.")
@@ -134,7 +141,7 @@ class S3Downloader(Downloader):
         try:
             bucket, key = self._parse_s3_uri(uri)
         except ValueError as e:
-            log.error(f"Invalid S3 URI: {e}")
+            log.error("Invalid S3 URI: %s", e)
             emit_event(
                 ProgressEventType.TASK_COMPLETED,
                 task_id=task_id,
@@ -147,10 +154,10 @@ class S3Downloader(Downloader):
             try:
                 # Ensure we have authentication
                 if not self.auth.ensure_authenticated():
-                    log.error(f"Authentication failed on attempt {attempt + 1}")
+                    log.error("Authentication failed on attempt %s", attempt + 1)
                     continue
 
-                log.debug(f"Downloading s3://{bucket}/{key} (attempt {attempt + 1}/{self.max_retries})")
+                log.debug("Downloading s3://%s/%s (attempt %s/%s)", bucket, key, attempt + 1, self.max_retries)
 
                 # Get object metadata to get file size
                 try:
@@ -159,7 +166,7 @@ class S3Downloader(Downloader):
                     if total_size:
                         emit_event(ProgressEventType.TASK_DURATION, task_id=task_id, duration=total_size)
                 except Exception as e:
-                    log.debug(f"Could not get object metadata: {e}")
+                    log.debug("Could not get object metadata: %s", e)
                     total_size = None
 
                 # Download file in chunks with progress reporting
@@ -177,19 +184,19 @@ class S3Downloader(Downloader):
                             downloaded_bytes += len(chunk)
                             emit_event(ProgressEventType.TASK_PROGRESS, task_id=task_id, advance=len(chunk))
 
-                log.debug(f"Successfully downloaded s3://{bucket}/{key} ({downloaded_bytes} bytes)")
+                log.debug("Successfully downloaded s3://%s/%s (%s bytes)", bucket, key, downloaded_bytes)
                 emit_event(ProgressEventType.TASK_COMPLETED, task_id=task_id, success=True)
                 return True
 
             except NoCredentialsError:
-                log.error(f"No AWS credentials found on attempt {attempt + 1}")
+                log.error("No AWS credentials found on attempt %s", attempt + 1)
                 error = "no credentials"
                 # Try to refresh authentication
                 if not self.auth.ensure_authenticated(refresh=True):
                     log.error("Failed to refresh credentials")
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                log.debug(f"S3 client error on attempt {attempt + 1}: {error_code} - {e}")
+                log.debug("S3 client error on attempt %s: %s - %s", attempt + 1, error_code, e)
                 error = f"client error: {error_code}"
 
                 # Handle specific error cases
@@ -198,13 +205,15 @@ class S3Downloader(Downloader):
                     if not self.auth.ensure_authenticated(refresh=True):
                         log.error("Failed to refresh credentials")
                 elif error_code == "404" or error_code == "NoSuchKey":
-                    log.error(f"Object not found: s3://{bucket}/{key}")
+                    log.error("Object not found: s3://%s/%s", bucket, key)
                     break  # No point retrying for 404
             except BotoCoreError as e:
-                log.debug(f"BotoCore error on attempt {attempt + 1}: {e}")
+                log.debug("BotoCore error on attempt %s: %s", attempt + 1, e)
                 error = f"botocore error: {e}"
             except Exception as e:
-                log.warning(f"Unexpected error downloading {uri} on attempt {attempt + 1}: {type(e).__name__} - {e}")
+                log.warning(
+                    "Unexpected error downloading %s on attempt %s: %s - %s", uri, attempt + 1, type(e).__name__, e
+                )
                 error = str(e)
 
         emit_event(
@@ -216,7 +225,7 @@ class S3Downloader(Downloader):
         return False
 
     def close(self) -> None:
-        """Close S3 client connection."""
+        """Close S3 client connection and clean up resources."""
         if self.s3_client:
             # boto3 clients don't need explicit closing, but we can clean up the reference
             self.s3_client = None

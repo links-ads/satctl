@@ -22,10 +22,6 @@ modifiers:
 # for these resolutions will be empty placeholders to prevent errors.
 
 composites:
-  # ============================================================================
-  # 250m Resolution Composites (MOD02QKM - Bands 1-2)
-  # ============================================================================
-
   all_bands_250m_day:
     # Daytime 250m composite: Bands 1-2 (both reflective, require sunz correction)
     compositor: !!python/name:satctl.composites.MultiBandCompositor
@@ -43,10 +39,6 @@ composites:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites: []
     standard_name: all_bands_250m_night
-
-  # ============================================================================
-  # 500m Resolution Composites (MOD02HKM - Bands 1-7)
-  # ============================================================================
 
   all_bands_500m_day:
     # Daytime 500m composite: Bands 1-7 (all reflective, require sunz correction)
@@ -75,10 +67,6 @@ composites:
     compositor: !!python/name:satctl.composites.MultiBandCompositor
     prerequisites: []
     standard_name: all_bands_500m_night
-
-  # ============================================================================
-  # 1km Resolution Composites (MOD021KM - Bands 1-36)
-  # ============================================================================
 
   all_bands_1km_day:
     # Daytime 1km composite: All 36 bands

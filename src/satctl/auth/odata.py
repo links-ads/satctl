@@ -18,6 +18,17 @@ class ODataAuthenticator(Authenticator):
         username: str,
         password: str,
     ):
+        """Initialize OData authenticator for Copernicus Data Space.
+
+        Args:
+            token_url (str): OAuth2 token endpoint URL
+            client_id (str): OAuth2 client ID
+            username (str): Copernicus username
+            password (str): Copernicus password
+
+        Raises:
+            ValueError: If any required parameter is missing
+        """
         self.token_url = token_url
         self.client_id = client_id
         self.username = username
@@ -26,12 +37,16 @@ class ODataAuthenticator(Authenticator):
         self.refresh_token: str | None = None
 
         if not self.token_url or not self.client_id:
-            raise ValueError("Token URL and client ID must be set")
+            raise ValueError("Invalid configuration: token_url and client_id are required")
         if not self.username or not self.password:
-            raise ValueError("Username and password variables must be set")
+            raise ValueError("Invalid configuration: username and password are required")
 
     def authenticate(self) -> bool:
-        """Authenticate with username/password and get tokens"""
+        """Authenticate with username/password and get tokens.
+
+        Returns:
+            bool: True if authentication succeeded, False otherwise
+        """
         try:
             data = {
                 "grant_type": "password",
@@ -57,11 +72,15 @@ class ODataAuthenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.error(f"Authentication failed: {e}")
+            log.error("Authentication failed: %s", e)
             return False
 
     def refresh_access_token(self) -> bool:
-        """Refresh the access token using refresh token"""
+        """Refresh the access token using refresh token.
+
+        Returns:
+            bool: True if refresh succeeded, False otherwise
+        """
         if not self.refresh_token:
             log.warning("No refresh token available, need to re-authenticate")
             return self.authenticate()
@@ -84,27 +103,44 @@ class ODataAuthenticator(Authenticator):
             return True
 
         except requests.exceptions.RequestException as e:
-            log.error(f"Token refresh failed: {e}")
+            log.error("Token refresh failed: %s", e)
             # If refresh fails, try to re-authenticate
             return self.authenticate()
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        """
-        Get headers with Bearer token for authenticated requests
+        """Get headers with Bearer token for authenticated requests.
+
+        Returns:
+            dict[str, str]: Dictionary with Authorization header
+
+        Raises:
+            RuntimeError: If authentication fails
         """
         if not self.access_token:
             if not self.authenticate():
-                raise RuntimeError("Failed to authenticate with Copernicus")
+                raise RuntimeError("Authentication failed for Copernicus Data Space: could not obtain access token")
         return {"Authorization": f"Bearer {self.access_token}"}
 
     @property
     def auth_session(self) -> Any:
+        """Get authenticated session object.
+
+        OData authenticator does not provide a session object.
+
+        Returns:
+            Any: None (no session object for OData)
+        """
         return None
 
     def ensure_authenticated(self, refresh: bool = False) -> bool:
-        """
-        Ensure we have a valid access token
+        """Ensure we have a valid access token.
+
+        Args:
+            refresh (bool): If True, refresh the token. Defaults to False.
+
+        Returns:
+            bool: True if authenticated, False otherwise
         """
         if not self.access_token:
             return self.authenticate()

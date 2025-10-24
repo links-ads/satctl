@@ -30,10 +30,12 @@ class ProgressReporter(ABC):
 
     @abstractmethod
     def start(self) -> None:
+        """Start the progress reporter and subscribe to events."""
         get_bus().subscribe(self.handle_event)
 
     @abstractmethod
     def stop(self) -> None:
+        """Stop the progress reporter and unsubscribe from events."""
         get_bus().unsubscribe(self.handle_event)
 
     def handle_event(self, event: ProgressEvent) -> None:
@@ -49,27 +51,69 @@ class ProgressReporter(ABC):
         event_handler_name = f"on_{event.type.value}"
         event_handler_fn = getattr(self, event_handler_name, None)
         if event_handler_fn is None:
-            raise ValueError(f"No handler for event: {event.type.value}")
+            raise ValueError(
+                f"No handler for event type: '{event.type.value}' (expected method '{event_handler_name}')"
+            )
         if event.type.value != "task_progress":
             log.debug("Handling event: %s", event)
         event_handler_fn(event)
 
-    def on_batch_started(self, event: ProgressEvent): ...
+    def on_batch_started(self, event: ProgressEvent):
+        """Handle batch started event.
 
-    def on_batch_completed(self, event: ProgressEvent): ...
+        Args:
+            event (ProgressEvent): Progress event
+        """
+        ...
 
-    def on_task_created(self, event: ProgressEvent): ...
+    def on_batch_completed(self, event: ProgressEvent):
+        """Handle batch completed event.
 
-    def on_task_duration(self, event: ProgressEvent): ...
+        Args:
+            event (ProgressEvent): Progress event
+        """
+        ...
 
-    def on_progress(self, event: ProgressEvent): ...
+    def on_task_created(self, event: ProgressEvent):
+        """Handle task created event.
 
-    def task_completed(self, event: ProgressEvent): ...
+        Args:
+            event (ProgressEvent): Progress event
+        """
+        ...
+
+    def on_task_duration(self, event: ProgressEvent):
+        """Handle task duration event.
+
+        Args:
+            event (ProgressEvent): Progress event
+        """
+        ...
+
+    def on_task_progress(self, event: ProgressEvent):
+        """Handle task progress event.
+
+        Args:
+            event (ProgressEvent): Progress event
+        """
+        ...
+
+    def on_task_completed(self, event: ProgressEvent):
+        """Handle task completed event.
+
+        Args:
+            event (ProgressEvent): Progress event
+        """
+        ...
 
 
 class EmptyProgressReporter(ProgressReporter):
+    """No-op progress reporter that does nothing."""
+
     def start(self) -> None:
+        """Start reporter (no-op)."""
         pass
 
     def stop(self) -> None:
+        """Stop reporter (no-op)."""
         pass
