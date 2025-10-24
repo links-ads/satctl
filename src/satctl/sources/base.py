@@ -191,21 +191,11 @@ class DataSource(ABC):
                 future_to_item_map = {executor.submit(self.download_item, item, destination): item for item in items}
                 for future in as_completed(future_to_item_map):
                     item = future_to_item_map[future]
-                    try:
-                        result = future.result()
-                        if result:
-                            success.append(item)
-                        else:
-                            failure.append(item)
-                    except Exception as e:
-                        log.error(f"Error downloading item {item.granule_id}: {e}")
-            emit_event(
-                ProgressEventType.BATCH_COMPLETED,
-                task_id=batch_id,
-                success_count=len(success),
-                failure_count=len(failure),
-            )
-            return success, failure
+                    result = future.result()
+                    if result:
+                        success.append(item)
+                    else:
+                        failure.append(item)
         except KeyboardInterrupt:
             log.info("Interrupted, cleaning up...")
             if executor:
@@ -217,7 +207,7 @@ class DataSource(ABC):
                 success_count=len(success),
                 failure_count=len(failure),
             )
-            return success, failure
+        return success, failure
 
     def load_scene(
         self,
