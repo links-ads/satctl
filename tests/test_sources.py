@@ -10,12 +10,15 @@ Tests are designed to run in sequence. If any step fails, subsequent steps
 will be skipped automatically using class-level state tracking.
 """
 
+import logging
 from pathlib import Path
 
 import pytest
 
 from satctl.model import Granule
 from satctl.sources import DataSource
+
+log = logging.getLogger(__name__)
 
 
 class IntegrationTestBase:
@@ -54,6 +57,40 @@ class IntegrationTestBase:
         cls._auth_failed = False
         cls._search_failed = False
         cls._download_failed = False
+
+    @classmethod
+    def check_prerequisites(cls, *steps: str) -> None:
+        """Check if any prerequisite steps failed and skip if necessary.
+
+        Args:
+            *steps: Step names to check ('auth', 'search', 'download')
+
+        Raises:
+            pytest.skip: If any prerequisite step failed
+        """
+        if "auth" in steps and cls._auth_failed:
+            pytest.skip("Skipping: authentication failed")
+        if "search" in steps and cls._search_failed:
+            pytest.skip("Skipping: search failed")
+        if "download" in steps and cls._download_failed:
+            pytest.skip("Skipping: download failed")
+
+    @classmethod
+    def mark_failure(cls, step: str, error: Exception) -> None:
+        """Mark a step as failed and log the error.
+
+        Args:
+            step: Step name ('auth', 'search', 'download')
+            error: The exception that caused the failure
+        """
+        if step == "auth":
+            cls._auth_failed = True
+        elif step == "search":
+            cls._search_failed = True
+        elif step == "download":
+            cls._download_failed = True
+
+        log.error(f"{step.capitalize()} failed: {type(error).__name__}: {error}")
 
 
 # Run once per test class in this module to reset IntegrationTestBase-derived classes
@@ -123,9 +160,8 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             type(self).source = source
 
         except Exception as e:
-            # Mark class-level auth failure
-            type(self)._auth_failed = True
-            pytest.fail(f"Authentication/initialization failed: {e}")
+            type(self).mark_failure("auth", e)
+            raise
 
     def test_search(
         self,
@@ -143,8 +179,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
         Args:
             test_search_params: Fixture providing test search parameters
         """
-        if self._auth_failed:
-            pytest.skip("Skipping search: authentication failed")
+        self.check_prerequisites("auth")
 
         try:
             # Search for granules
@@ -155,16 +190,16 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             assert len(granules) > 0, f"Search should return at least one granule, got {len(granules)}"
 
             # Log what we found
-            print(f"\nFound {len(granules)} VIIRS granules")
+            log.info(f"Found {len(granules)} VIIRS granules")
             if granules:
-                print(f"First granule ID: {granules[0].granule_id}")
+                log.info(f"First granule ID: {granules[0].granule_id}")
 
             # Store for subsequent tests on the class
             type(self).granules = granules
 
         except Exception as e:
-            type(self)._search_failed = True
-            pytest.fail(f"Search failed: {e}")
+            type(self).mark_failure("search", e)
+            raise
 
     def test_download(
         self,
@@ -182,10 +217,8 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
         Args:
             temp_download_dir: Fixture providing temporary download directory
         """
-        if self._auth_failed:
-            pytest.skip("Skipping download: authentication failed")
-        if self._search_failed:
-            pytest.skip("Skipping download: search failed")
+        self.check_prerequisites("auth", "search")
+
         if not self.granules:
             pytest.skip("Skipping download: no granules found")
 
@@ -193,7 +226,8 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             success, failure = self.source.download(self.granules, temp_download_dir)
 
             # Verify download succeeded
-            assert len(success) > 0 and len(failure) == 0, "some download failed"
+            assert len(success) > 0, f"Should have at least one successful download, got {len(success)}"
+            assert len(failure) == 0, f"Should have no failed downloads, got {len(failure)} failures"
 
             # Verify local_path is set and exists
             for item in success:
@@ -203,25 +237,26 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
                 # Verify we have some files
                 files = list(item.local_path.glob("*.nc"))
                 assert len(files) > 0, f"Should have downloaded .nc files, found {len(files)}"
-                print(f"Downloaded {len(files)} files to {item.local_path}")
+                log.info(f"Downloaded {len(files)} files to {item.local_path}")
 
                 # Store for subsequent tests on the class
                 type(self).downloaded_item.append(item)
 
         except Exception as e:
-            type(self)._download_failed = True
-            pytest.fail(f"Download failed: {e}")
+            type(self).mark_failure("download", e)
+            raise
 
     def test_convert(
         self,
         temp_download_dir,
         test_conversion_params,
+        geotiff_writer,
     ) -> None:
         """Test converting VIIRS granule(s) to GeoTIFF.
 
         This test:
         1. Skips if any previous step failed
-        2. Creates a GeoTIFFWriter instance
+        2. Uses the configured GeoTIFFWriter instance
         3. Converts all downloaded granules using save()
         4. Verifies conversion succeeded with no failures
         5. Verifies output files exist for each granule and have non-zero size
@@ -230,70 +265,60 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
         Args:
             temp_download_dir: Fixture providing temporary download directory
             test_conversion_params: Fixture providing test conversion parameters
+            geotiff_writer: Fixture providing configured GeoTIFF writer
         """
-        if self._auth_failed:
-            pytest.skip("Skipping convert: authentication failed")
-        if self._search_failed:
-            pytest.skip("Skipping convert: search failed")
-        if self._download_failed:
-            pytest.skip("Skipping convert: download failed")
+        self.check_prerequisites("auth", "search", "download")
+
         if not self.downloaded_item:
             pytest.skip("Skipping convert: no downloaded item")
 
-        try:
-            from satctl.writers import GeoTIFFWriter
+        log.info(f"Converting {len(self.downloaded_item)} granule(s)")
 
-            # Create writer
-            writer = GeoTIFFWriter(compress="lzw", tiled=True)
+        # Convert granule(s) to GeoTIFF using save()
+        success, failure = self.source.save(
+            self.downloaded_item,
+            test_conversion_params,
+            temp_download_dir,
+            geotiff_writer,
+            force=False,
+        )
 
-            print(f"\nConverting {len(self.downloaded_item)} granule(s)")
+        # Verify conversion succeeded
+        assert len(success) > 0, f"Should have at least one successful conversion, got {len(success)}"
+        assert len(failure) == 0, f"Should have no conversion failures, got {len(failure)}"
 
-            # Convert granule(s) to GeoTIFF using save()
-            success, failure = self.source.save(
-                self.downloaded_item,
-                test_conversion_params,
-                temp_download_dir,
-                writer,
-                force=False,
+        log.info(f"Successfully processed {len(success)} granule(s)")
+
+        # Collect all output paths from all processed granules
+        all_output_paths = []
+
+        # Verify each successfully processed granule
+        for granule in success:
+            granule_id = granule.granule_id
+            log.info(f"Verifying output for granule: {granule_id}")
+
+            # Find output files in the granule's output directory
+            output_dir = temp_download_dir / granule_id
+            assert output_dir.exists(), f"Output directory should exist: {output_dir}"
+
+            # Collect all output files (assuming GeoTIFF extension)
+            output_paths = list(output_dir.glob(f"*.{geotiff_writer.extension}"))
+            assert len(output_paths) > 0, (
+                f"Should have at least one output file for {granule_id}, got {len(output_paths)}"
             )
 
-            # Verify conversion succeeded
-            assert len(success) > 0, "Should have at least one successful conversion"
-            assert len(failure) == 0, f"Should have no failures, got {len(failure)}"
+            log.info(f"Created {len(output_paths)} output file(s) for {granule_id}")
 
-            print(f"\nSuccessfully processed {len(success)} granule(s)")
+            # Verify each output file exists and has content
+            for output_path in output_paths:
+                assert isinstance(output_path, Path), f"Output path should be a Path object, got {type(output_path)}"
+                assert output_path.exists(), f"Output file should exist: {output_path}"
 
-            # Collect all output paths from all processed granules
-            all_output_paths = []
+                file_size = output_path.stat().st_size
+                assert file_size > 0, f"Output file should have non-zero size: {output_path} ({file_size} bytes)"
 
-            # Verify each successfully processed granule
-            for granule in success:
-                granule_id = granule.granule_id
-                print(f"\nVerifying output for granule: {granule_id}")
+                log.info(f"  {output_path.name}: {file_size:,} bytes")
+                all_output_paths.append(output_path)
 
-                # Find output files in the granule's output directory
-                output_dir = temp_download_dir / granule_id
-                assert output_dir.exists(), f"Output directory should exist: {output_dir}"
-
-                # Collect all output files (assuming GeoTIFF extension)
-                output_paths = list(output_dir.glob(f"*.{writer.extension}"))
-                assert len(output_paths) > 0, f"Should have at least one output file for {granule_id}, got {len(output_paths)}"
-
-                print(f"  Created {len(output_paths)} output file(s):")
-
-                # Verify each output file exists and has content
-                for output_path in output_paths:
-                    assert isinstance(output_path, Path), f"Output path should be a Path object, got {type(output_path)}"
-                    assert output_path.exists(), f"Output file should exist: {output_path}"
-
-                    file_size = output_path.stat().st_size
-                    assert file_size > 0, f"Output file should have non-zero size: {output_path} ({file_size} bytes)"
-
-                    print(f"    - {output_path.name} ({file_size:,} bytes)")
-                    all_output_paths.append(output_path)
-
-            # Store all output files for inspection if needed
-            type(self).output_files = all_output_paths
-
-        except Exception as e:
-            pytest.fail(f"Conversion failed: {e}")
+        # Store all output files for inspection if needed
+        type(self).output_files = all_output_paths

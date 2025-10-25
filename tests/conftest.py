@@ -1,11 +1,14 @@
 """Pytest configuration and fixtures for integration tests."""
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
+
+log = logging.getLogger(__name__)
 
 # Load .env file BEFORE any imports that might use satpy
 # This must happen at module import time, not in a fixture, because satpy
@@ -20,9 +23,9 @@ if env_path.exists():
     if satpy_config and not Path(satpy_config).is_absolute():
         abs_path = (Path(__file__).parent.parent / satpy_config).resolve()
         os.environ["SATPY_CONFIG_PATH"] = str(abs_path)
-        print(f"Set SATPY_CONFIG_PATH to: {abs_path}")
+        log.info(f"Set SATPY_CONFIG_PATH to: {abs_path}")
 else:
-    print(f"Warning: .env file not found at {env_path}")
+    log.warning(f".env file not found at {env_path}")
 
 
 @pytest.fixture(scope="session")
@@ -137,17 +140,22 @@ def temp_download_dir(tmp_path):
 def test_search_params():
     """Provide SearchParams for integration tests.
 
+    Uses the EMSR760 GeoJSON file located in the data/ directory at the project root.
+    Configured with a date range that has known satellite coverage for the test area.
+
     Returns:
         SearchParams: Search parameters configured for testing
     """
     from satctl.model import SearchParams
 
+    # Use absolute path relative to project root
+    project_root = Path(__file__).parent.parent
+    geojson_path = project_root / "data" / "EMSR760.json"
+
     return SearchParams.from_file(
-        # TODO put a known geojson somewhere, maybe convert to fixture
-        path=Path("data/EMSR760.json"),
-        # TODO ensure dates with satellite coverage for test_area_path
-        start=datetime.strptime("2025-09-01", "%Y-%m-%d"),
-        end=datetime.strptime("2025-09-04", "%Y-%m-%d"),
+        path=geojson_path,
+        start=datetime.strptime("2024-09-01", "%Y-%m-%d"),
+        end=datetime.strptime("2024-09-04", "%Y-%m-%d"),
     )
 
 
@@ -155,13 +163,33 @@ def test_search_params():
 def test_conversion_params():
     """Provide ConversionParams for integration tests.
 
+    Uses the EMSR760 GeoJSON file located in the data/ directory at the project root.
+    Configured to output in WGS84 (EPSG:4326) coordinate reference system.
+
     Returns:
         ConversionParams: Conversion parameters configured for testing
     """
     from satctl.model import ConversionParams
 
+    # Use absolute path relative to project root
+    project_root = Path(__file__).parent.parent
+    geojson_path = project_root / "data" / "EMSR760.json"
+
     return ConversionParams.from_file(
-        # TODO put a known geojson somewhere, maybe convert to fixture
-        path=Path("data/EMSR760.json"),
+        path=geojson_path,
         target_crs="EPSG:4326",
     )
+
+
+@pytest.fixture
+def geotiff_writer():
+    """Provide a configured GeoTIFFWriter instance for tests.
+
+    Configured with LZW compression and tiling enabled for efficient storage.
+
+    Returns:
+        GeoTIFFWriter: Writer instance configured for test outputs
+    """
+    from satctl.writers import GeoTIFFWriter
+
+    return GeoTIFFWriter(compress="lzw", tiled=True)
