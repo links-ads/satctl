@@ -2,7 +2,7 @@
 
 Modular library and CLI utility to search, download and process satellite data from different sources, powered by [satpy](https://satpy.readthedocs.io/en/stable/).
 
-[![test passing](https://img.shields.io/github/actions/workflow/status/link-ads/satctl/test.yml?branch=main)](https://github.com/links-ads/pydantic)
+[![test passing](https://img.shields.io/github/actions/workflow/status/links-ads/satctl/test.yml)](https://github.com/links-ads/satctl)
 [![coverage](https://img.shields.io/codecov/c/gh/links-ads/satctl)](https://codecov.io/gh/links-ads/satctl)
 [![pypi version](https://img.shields.io/pypi/v/satctl)](https://pypi.org/project/satctl/)
 [![python versions](https://img.shields.io/pypi/pyversions/satctl)](https://github.com/links-ads/satctl)
