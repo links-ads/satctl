@@ -1,0 +1,28 @@
+site_name: satctl
+site_url: https://links-ads.github.io/satctl
+repo_url: https://github.com/links-ads/satctl
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: light-blue
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: black
+      accent: light-blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
