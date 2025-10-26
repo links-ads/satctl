@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # or directly create any source
     source = create_source("slstr")
-)
+
     # Define a research area, from file or as a simple Polygon
     area_file = Path("my_aoi.geojson")
 
