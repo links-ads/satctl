@@ -33,7 +33,7 @@ typecheck: .pre-commit
 
 .PHONY: test  ## Run all tests
 test: .uv
-	uv run coverage run -m pytest -s --durations=10 --parallel-threads $(NUM_THREADS)
+	uv run coverage run -m pytest -s --durations=10
 
 .PHONY: all  ## Run the standard set of checks performed in CI
 all: lint typecheck codespell testcov
