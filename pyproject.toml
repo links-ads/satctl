@@ -35,7 +35,11 @@ dependencies = [
 
 [project.optional-dependencies]
 console = ["rich>=14.1.0", "typer>=0.19.2"]
-dev = ["ruff>=0.13.2"]
+dev = [
+    "mkdocs-material>=9.6.22",
+    "pyright>=1.1.406",
+    "ruff>=0.13.2",
+]
 test = ["pytest>=8.4.2", "pytest-cov>=7.0.0"]
 
 [project.scripts]

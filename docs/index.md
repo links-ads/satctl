@@ -1,16 +1,4 @@
-# satctl
-
-Modular library and CLI utility to search, download and process satellite data from different sources, powered by [satpy](https://satpy.readthedocs.io/en/stable/).
-
-[![test passing](https://img.shields.io/github/actions/workflow/status/link-ads/satctl/test.yml?branch=main)](https://github.com/links-ads/pydantic)
-[![coverage](https://img.shields.io/codecov/c/gh/links-ads/satctl)](https://codecov.io/gh/links-ads/satctl)
-[![pypi version](https://img.shields.io/pypi/v/satctl)](https://pypi.org/project/satctl/)
-[![python versions](https://img.shields.io/pypi/pyversions/satctl)](https://github.com/links-ads/satctl)
-
-[![license](https://img.shields.io/github/license/links-ads/satctl)](https://github.com/links-ads/satctl)
-[![documentation](https://img.shields.io/badge/documentation-%F0%9F%93%9A-blue)](https://links-ads.github.io/satctl/)
-
-## Quickstart
+# Quickstart
 
 `satctl` can be installed via pip, or uv, in different flavors.
 
@@ -48,11 +36,19 @@ if __name__ == "__main__":
     area_file = Path("my_aoi.geojson")
 
     # filter by space, time or source options
-    params = SearchParams.from_file(path=area_file, datetime(2025, 8, 15), end=datetime(2025, 8, 16))
+    params = SearchParams.from_file(
+        path=area_file,
+        datetime(2025, 8, 15),
+        end=datetime(2025, 8, 16),
+    )
     items = source.search(params)
 
     # download the tiles locally
-    downloaded, fail = source.download(items, destination=Path("downloads/"), num_workers=4)
+    downloaded, fail = source.download(
+        items,
+        destination=Path("downloads/"),
+        num_workers=4,
+    )
 
     # ... load an item as a satpy Scene ...
     sene = source.load_scene(items[0], datasets=["S3", "S2", "S1"])
@@ -86,4 +82,4 @@ The easiest way to quickstart is the following:
 $ make install
 ```
 
-More information about contributing will be added in the main documentation.
+More information about contributing will be added in the main documentation
