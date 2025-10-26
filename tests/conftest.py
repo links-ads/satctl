@@ -13,19 +13,7 @@ log = logging.getLogger(__name__)
 # Load .env file BEFORE any imports that might use satpy
 # This must happen at module import time, not in a fixture, because satpy
 # reads SATPY_CONFIG_PATH when it's first imported (during test collection)
-env_path = Path(__file__).parent.parent / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
-
-    # Convert SATPY_CONFIG_PATH to absolute path if it's relative
-    # This ensures satpy can find the custom composites regardless of working directory
-    satpy_config = os.getenv("SATPY_CONFIG_PATH")
-    if satpy_config and not Path(satpy_config).is_absolute():
-        abs_path = (Path(__file__).parent.parent / satpy_config).resolve()
-        os.environ["SATPY_CONFIG_PATH"] = str(abs_path)
-        log.info(f"Set SATPY_CONFIG_PATH to: {abs_path}")
-else:
-    log.warning(f".env file not found at {env_path}")
+load_dotenv()
 
 
 @pytest.fixture(scope="session")
