@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  UV_FROZEN: true
+  # UV_FROZEN: true # requires uv.lock file
   FORCE_COLOR: 1
 
 jobs:

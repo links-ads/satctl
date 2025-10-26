@@ -16,6 +16,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install depencencies
-        run: uv sync --group dev
+        run: uv sync --extra dev
       - name: Deploy docs
         run: mkdocs gh-deploy --force
