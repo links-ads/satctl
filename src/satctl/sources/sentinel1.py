@@ -181,6 +181,7 @@ class Sentinel1Source(DataSource):
 
         # Create directory with .SAFE extension for sar-c_safe reader compatibility
         local_path = destination / f"{item.granule_id}.SAFE"
+        local_path = local_path.with_name(local_path.name.replace("_COG", ""))  # Remove COG suffix if present
         local_path.mkdir(parents=True, exist_ok=True)
 
         all_success = True
@@ -203,7 +204,7 @@ class Sentinel1Source(DataSource):
             else:
                 # Fallback to flat structure if pattern not found
                 target_file = local_path / (asset_name + Path(asset.href).suffix)
-
+            target_file = target_file.with_name(target_file.name.replace("_COG", "").replace("_cog", "").replace("-cog", "").replace("-COG", ""))  # Remove COG suffix if present
             target_file.parent.mkdir(parents=True, exist_ok=True)
             result = self.downloader.download(
                 uri=asset.href,
