@@ -16,7 +16,6 @@ from typing import Any
 
 from satctl.auth import registry as auth_registry
 from satctl.config import get_settings
-from satctl.downloaders import registry as dwl_registry
 from satctl.registry import Registry
 from satctl.sources.base import DataSource
 from satctl.sources.earthdata import EarthDataSource
@@ -39,7 +38,6 @@ registry.register("modis-l1b", MODISL1BSource)
 def create_source(
     source_name: str,
     authenticator: str | None = None,
-    downloader: str | None = None,
     **kwargs: dict[str, Any],
 ) -> DataSource:
     """Create a data source from the given parameters.
@@ -47,8 +45,7 @@ def create_source(
 
     Args:
         source_name (str): Name of the data source, strictly required.
-        authenticator (str | None, optional): Authenticator class name. Inferrred from config when it defaults to None.
-        downloader (str | None, optional): Downloader class name. Inferred from config when it defaults to None.
+        authenticator (str | None, optional): Authenticator class name. Inferred from config when it defaults to None.
         kwargs (dict[str, Any], optional): Any other keyword argument to be passed to the source.
 
     Returns:
@@ -58,21 +55,58 @@ def create_source(
     source_params = config.sources.get(source_name, {}).copy()
     source_params.update(kwargs)
 
+    # Remove downloader from source_params as it's no longer passed to source __init__
+    source_params.pop("downloader", None)
+
     auth_instance = None
     if auth_name := source_params.pop("authenticator", authenticator):
         auth_config = config.auth.get(auth_name, {})
         auth_instance = auth_registry.create(auth_name, **auth_config)
 
-    dwl_instance = None
-    if dwl_name := source_params.pop("downloader", downloader):
-        dwl_config = config.download.get(dwl_name, {})
-        dwl_instance = dwl_registry.create(dwl_name, authenticator=auth_instance, **dwl_config)
-
     return registry.create(
         source_name,
-        downloader=dwl_instance,
+        authenticator=auth_instance,
         **source_params,
     )
+
+
+def create_downloader(
+    source_name: str,
+    authenticator=None,
+    downloader_name: str | None = None,
+    **kwargs: dict[str, Any],
+):
+    """Create a downloader instance for a given source.
+
+    Args:
+        source_name (str): Name of the data source (to get downloader config from)
+        authenticator: Authenticator instance to use
+        downloader_name (str | None): Explicit downloader name. If None, inferred from source config.
+        kwargs (dict[str, Any]): Additional downloader configuration
+
+    Returns:
+        Downloader instance configured for the source
+    """
+    from satctl.downloaders import registry as dwl_registry
+
+    config = get_settings()
+    source_params = config.sources.get(source_name, {})
+
+    # Get downloader name from explicit param, source config, or fallback
+    if downloader_name is None:
+        downloader_name = source_params.get("downloader")
+
+    if downloader_name is None:
+        raise ValueError(
+            f"No downloader configured for source '{source_name}'. "
+            "Specify downloader in config or pass downloader_name parameter."
+        )
+
+    # Get downloader config and merge with kwargs
+    dwl_config = config.download.get(downloader_name, {}).copy()
+    dwl_config.update(kwargs)
+
+    return dwl_registry.create(downloader_name, authenticator=authenticator, **dwl_config)
 
 
 __all__ = [
@@ -86,4 +120,5 @@ __all__ = [
     "VIIRSL1BSource",
     "MODISL1BSource",
     "create_source",
+    "create_downloader",
 ]

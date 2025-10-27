@@ -7,6 +7,9 @@ from typing import Literal, TypedDict
 
 from pyhdf.SD import SD, SDC
 
+from typing import Any
+
+from satctl.auth import Authenticator
 from satctl.downloaders import Downloader
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
@@ -50,8 +53,7 @@ class MODISSource(EarthDataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
-        short_name: str,
+        authenticator: Authenticator,        short_name: str,
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -62,8 +64,7 @@ class MODISSource(EarthDataSource):
         Args:
             collection_name (str): Name of the MODIS collection
             reader (str): Satpy reader name for this product type
-            downloader (Downloader): Downloader instance for file retrieval
-            short_name (str): NASA CMR short name for the dataset
+            authenticator (Authenticator): Authenticator instance for credential management            short_name (str): NASA CMR short name for the dataset
             version (str | None): Dataset version. Defaults to None.
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
@@ -72,8 +73,7 @@ class MODISSource(EarthDataSource):
         super().__init__(
             collection_name,
             reader=reader,
-            downloader=downloader,
-            short_name=short_name,
+            authenticator=authenticator,            short_name=short_name,
             version=version,
             default_composite=default_composite,
             default_resolution=default_resolution,
@@ -273,16 +273,14 @@ class MODISL1BSource(MODISSource):
     def __init__(
         self,
         *,
-        downloader: Downloader,
-        platform: list[Literal["mod", "myd"]],
+        authenticator: Authenticator,        platform: list[Literal["mod", "myd"]],
         resolution: list[Literal["qkm", "hkm", "1km"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize MODIS Level 1B data source.
 
         Args:
-            downloader (Downloader): Downloader instance for file retrieval
-            platform (list[Literal["mod", "myd"]]): List of satellite platforms to search
+            authenticator (Authenticator): Authenticator instance for credential management            platform (list[Literal["mod", "myd"]]): List of satellite platforms to search
             resolution (list[Literal["qkm", "hkm", "1km"]]): List of resolutions to search
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
@@ -311,8 +309,7 @@ class MODISL1BSource(MODISSource):
             reader="modis_l1b",
             default_composite="automatic",
             default_resolution=primary["resolution_meters"],
-            downloader=downloader,
-            short_name=primary["short_name"],
+            authenticator=authenticator,            short_name=primary["short_name"],
             version=primary["version"],
             search_limit=search_limit,
         )

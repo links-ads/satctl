@@ -91,7 +91,7 @@ def download(
         num_workers (int | None): Number of parallel workers. Defaults to None.
     """
     from satctl.model import SearchParams
-    from satctl.sources import create_source, registry
+    from satctl.sources import create_downloader, create_source, registry
 
     init_reporter()
     if "all" in sources:
@@ -103,7 +103,8 @@ def download(
         output_subdir = output_dir / source_name.lower()
         source = create_source(source_name)
         items = source.search(params=search_params)
-        source.download(items, destination=output_subdir, num_workers=num_workers)
+        downloader = create_downloader(source_name, authenticator=source.authenticator)
+        source.download(items, destination=output_subdir, downloader=downloader, num_workers=num_workers)
 
 
 @app.command()

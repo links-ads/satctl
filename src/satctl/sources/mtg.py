@@ -9,6 +9,7 @@ from eumdac.datastore import DataStore
 from pydantic import BaseModel
 from satpy.scene import Scene
 
+from satctl.auth import Authenticator
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
@@ -33,8 +34,7 @@ class MTGSource(DataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
-        default_composite: str | None = None,
+        authenticator: Authenticator,        default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
@@ -45,8 +45,7 @@ class MTGSource(DataSource):
         Args:
             collection_name (str): Name of the MTG collection
             reader (str): Satpy reader name for this product type
-            downloader (Downloader): Downloader instance for file retrieval
-            default_composite (str | None): Default composite/band to load. Defaults to None.
+            authenticator (Authenticator): Authenticator instance for credential management            default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
             download_pool_conns (int): Number of download pool connections. Defaults to 10.
@@ -54,8 +53,7 @@ class MTGSource(DataSource):
         """
         super().__init__(
             collection_name,
-            downloader=downloader,
-            default_composite=default_composite,
+            authenticator=authenticator,            default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader
@@ -101,8 +99,10 @@ class MTGSource(DataSource):
         Returns:
             list[Granule]: List of matching granules with metadata and assets
         """
+        # Ensure authentication before searching
+        self._ensure_authenticated()
         log.debug("Setting up the DataStore client")
-        catalogue = DataStore(self.downloader.auth.auth_session)
+        catalogue = DataStore(self.authenticator.auth_session)
 
         log.debug("Searching catalog")
         collections = [catalogue.get_collection(c) for c in self.collections]
@@ -209,7 +209,7 @@ class MTGSource(DataSource):
             asset = cast(MTGAsset, asset)
             assert "access_token=" in asset.href, "The URL does not contain the 'access_token' query parameter."
 
-    def download_item(self, item: Granule, destination: Path) -> bool:
+    def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download single MTG item and extract to destination.
 
         Downloads the product ZIP file, extracts it, saves metadata, and removes the ZIP.
@@ -224,7 +224,8 @@ class MTGSource(DataSource):
         self.validate(item)
         zip_asset = cast(MTGAsset, item.assets["product"])
         local_file = destination / f"{item.granule_id}.zip"
-        if result := self.downloader.download(
+
+        if result := downloader.download(
             uri=zip_asset.href,
             destination=local_file,
             item_id=item.granule_id,
