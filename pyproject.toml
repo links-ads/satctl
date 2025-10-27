@@ -30,12 +30,26 @@ dependencies = [
     "pystac-client>=0.9.0",
     "satpy>=0.58.0",
     "shapely>=2.1.1",
-    "typer>=0.19.2",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries",
 ]
 
 [project.optional-dependencies]
 console = ["rich>=14.1.0", "typer>=0.19.2"]
-dev = ["ruff>=0.13.2"]
+dev = ["mkdocs-material>=9.6.22", "pyright>=1.1.406", "ruff>=0.13.2"]
 test = ["pytest>=8.4.2", "pytest-cov>=7.0.0"]
 
 [project.scripts]
@@ -47,3 +61,14 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 119
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (require real APIs and credentials)",
+    "requires_credentials: requires real API credentials from environment",
+    "slow: marks tests as slow running (>5 seconds)",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

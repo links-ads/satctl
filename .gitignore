@@ -216,3 +216,7 @@ outputs/
 # ignore configs
 config.yml
 .claude/
+
+# Ignore to avoid problems due to full /tmp dir
+pytest-of-*/
+*.npz
