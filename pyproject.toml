@@ -30,7 +30,6 @@ dependencies = [
     "pystac-client>=0.9.0",
     "satpy>=0.58.0",
     "shapely>=2.1.1",
-    "typer>=0.19.2",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -64,4 +63,12 @@ build-backend = "hatchling.build"
 line-length = 119
 
 [tool.pytest.ini_options]
-tmp_path_retention_policy = "none"
+markers = [
+    "integration: marks tests as integration tests (require real APIs and credentials)",
+    "requires_credentials: requires real API credentials from environment",
+    "slow: marks tests as slow running (>5 seconds)",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
