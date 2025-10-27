@@ -1,0 +1,22 @@
+name: docs
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install depencencies
+        run: uv sync --extra dev
+      - name: Deploy docs
+        run: uv run mkdocs gh-deploy --force

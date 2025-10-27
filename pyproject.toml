@@ -31,10 +31,25 @@ dependencies = [
     "satpy>=0.58.0",
     "shapely>=2.1.1",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries",
+]
 
 [project.optional-dependencies]
 console = ["rich>=14.1.0", "typer>=0.19.2"]
-dev = ["ruff>=0.13.2"]
+dev = ["mkdocs-material>=9.6.22", "pyright>=1.1.406", "ruff>=0.13.2"]
 test = ["pytest>=8.4.2", "pytest-cov>=7.0.0"]
 
 [project.scripts]
