@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+import dask
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
 from satpy.scene import Scene
@@ -261,6 +262,8 @@ class MTGSource(DataSource):
         Returns:
             dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
+        # Use synchronous dask scheduler for processing
+        dask.config.set(scheduler="synchronous")
         # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
 
