@@ -12,6 +12,7 @@ from pystac_client import Client
 from satpy.scene import Scene
 from xarray import DataArray
 
+from satctl.auth.base import Authenticator
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
@@ -69,7 +70,7 @@ class Sentinel1Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -80,19 +81,19 @@ class Sentinel1Source(DataSource):
         """Initialize Sentinel-1 data source.
 
         Args:
-            collection_name: Name of the Sentinel-1 collection (e.g., "sentinel-1-grd")
-            reader: Satpy reader name for this product type (typically "sar-c_safe")
-            downloader: Downloader instance for file retrieval from STAC
-            stac_url: URL of the STAC catalog API endpoint
-            default_composite: Default composite/band to load. Defaults to None.
-            default_resolution: Default resolution in meters. Defaults to None.
-            search_limit: Maximum number of items to return per search. Defaults to 100.
-            download_pool_conns: Number of concurrent download connections. Defaults to 10.
-            download_pool_size: Size of connection pool for downloads. Defaults to 2.
+            collection_name (str): Name of the Sentinel-1 collection (e.g., "sentinel-1-grd")
+            reader (str): Satpy reader name for this product type (typically "sar-c_safe")
+            authenticator (Authenticator): Authenticator instance for credential management
+            stac_url (str): URL of the STAC catalog API endpoint
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
+            search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            download_pool_conns (int): Number of concurrent download connections. Defaults to 10.
+            download_pool_size (int): Size of connection pool for downloads. Defaults to 2.
         """
         super().__init__(
             collection_name,
-            downloader=downloader,
+            authenticator=authenticator,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
@@ -276,7 +277,7 @@ class Sentinel1Source(DataSource):
         scene.load(datasets, calibration=calibration)
         return scene
 
-    def download_item(self, item: Granule, destination: Path) -> bool:
+    def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download Sentinel-1 assets and reconstruct SAFE directory structure.
         
         Downloads only the required assets (measurements and metadata) and organizes
@@ -327,7 +328,7 @@ class Sentinel1Source(DataSource):
             # Create subdirectories (measurement/, annotation/, etc.)
             target_file.parent.mkdir(parents=True, exist_ok=True)
             
-            result = self.downloader.download(
+            result = downloader.download(
                 uri=asset.href,
                 destination=target_file,
                 item_id=item.granule_id,
@@ -354,7 +355,7 @@ class Sentinel1Source(DataSource):
                 target_file = local_path / Path(metadata.href).name
 
             target_file.parent.mkdir(parents=True, exist_ok=True)
-            result = self.downloader.download(
+            result = downloader.download(
                 uri=metadata.href,
                 destination=target_file,
                 item_id=item.granule_id,
@@ -482,7 +483,7 @@ class Sentinel1GRDSource(Sentinel1Source):
     def __init__(
         self,
         *,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         composite: str = "sar_rgb",
         search_limit: int = 100,
@@ -504,7 +505,7 @@ class Sentinel1GRDSource(Sentinel1Source):
             reader="sar-c_safe",
             default_composite=composite,
             default_resolution=20,  # Native GRD resolution in IW mode
-            downloader=downloader,
+            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,
