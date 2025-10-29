@@ -90,8 +90,9 @@ def download(
         output_dir (Path | None): Output directory. Defaults to None.
         num_workers (int | None): Number of parallel workers. Defaults to None.
     """
+    from satctl.downloaders import create_downloader
     from satctl.model import SearchParams
-    from satctl.sources import create_downloader, create_source, registry
+    from satctl.sources import create_source, registry
 
     init_reporter()
     if "all" in sources:

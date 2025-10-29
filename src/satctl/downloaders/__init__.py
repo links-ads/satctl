@@ -38,7 +38,6 @@ def create_downloader(
     Returns:
         Downloader instance configured for the source
     """
-    from satctl.downloaders import registry as dwl_registry
 
     config = get_settings()
     source_params = config.sources.get(source_name, {})
@@ -57,7 +56,7 @@ def create_downloader(
     dwl_config = config.download.get(downloader_name, {}).copy()
     dwl_config.update(kwargs)
 
-    return dwl_registry.create(downloader_name, authenticator=authenticator, **dwl_config)
+    return registry.create(downloader_name, authenticator=authenticator, **dwl_config)
 
 
 __all__ = [
