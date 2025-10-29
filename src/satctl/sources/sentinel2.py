@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from pystac_client import Client
 from satpy.scene import Scene
 
+from satctl.auth import Authenticator
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
@@ -60,7 +61,7 @@ class Sentinel2Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -73,7 +74,7 @@ class Sentinel2Source(DataSource):
         Args:
             collection_name (str): Collection name identifier
             reader (str): Satpy reader name
-            downloader (Downloader): Downloader instance
+            authenticator (Authenticator): Authenticator instance for credential management
             stac_url (str): STAC catalog URL
             default_composite (str | None): Default composite name. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
@@ -83,7 +84,7 @@ class Sentinel2Source(DataSource):
         """
         super().__init__(
             collection_name,
-            downloader=downloader,
+            authenticator=authenticator,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
@@ -248,7 +249,7 @@ class Sentinel2Source(DataSource):
         scene.load(datasets, calibration=calibration)
         return scene
 
-    def download_item(self, item: Granule, destination: Path) -> bool:
+    def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download required assets preserving SAFE directory structure.
 
         Args:
@@ -287,7 +288,8 @@ class Sentinel2Source(DataSource):
                 target_file = local_path / (asset_name + Path(asset.href).suffix)
 
             target_file.parent.mkdir(parents=True, exist_ok=True)
-            result = self.downloader.download(
+
+            result = downloader.download(
                 uri=asset.href,
                 destination=target_file,
                 item_id=item.granule_id,
@@ -314,7 +316,8 @@ class Sentinel2Source(DataSource):
                 target_file = local_path / Path(metadata.href).name
 
             target_file.parent.mkdir(parents=True, exist_ok=True)
-            result = self.downloader.download(
+
+            result = downloader.download(
                 uri=metadata.href,
                 destination=target_file,
                 item_id=item.granule_id,
@@ -402,7 +405,7 @@ class Sentinel2L2ASource(Sentinel2Source):
     def __init__(
         self,
         *,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str = "true_color",
         default_resolution: int = 10,
@@ -413,7 +416,7 @@ class Sentinel2L2ASource(Sentinel2Source):
         """Initialize Sentinel-2 L2A source.
 
         Args:
-            downloader (Downloader): Downloader instance
+            authenticator (Authenticator): Authenticator instance for credential management
             stac_url (str): STAC catalog URL
             default_composite (str): Default composite name. Defaults to 'true_color'.
             default_resolution (int): Default resolution in meters. Defaults to 10.
@@ -426,7 +429,7 @@ class Sentinel2L2ASource(Sentinel2Source):
             reader="msi_safe_l2a",
             default_composite=default_composite,
             default_resolution=default_resolution,
-            downloader=downloader,
+            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,
@@ -492,7 +495,7 @@ class Sentinel2L1CSource(Sentinel2Source):
     def __init__(
         self,
         *,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str = "true_color",
         default_resolution: int = 10,
@@ -503,7 +506,7 @@ class Sentinel2L1CSource(Sentinel2Source):
         """Initialize Sentinel-2 L1C source.
 
         Args:
-            downloader (Downloader): Downloader instance
+            authenticator (Authenticator): Authenticator instance for credential management
             stac_url (str): STAC catalog URL
             default_composite (str): Default composite name. Defaults to 'true_color'.
             default_resolution (int): Default resolution in meters. Defaults to 10.
@@ -516,7 +519,7 @@ class Sentinel2L1CSource(Sentinel2Source):
             reader="msi_safe",
             default_composite=default_composite,
             default_resolution=default_resolution,
-            downloader=downloader,
+            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,

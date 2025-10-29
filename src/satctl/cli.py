@@ -90,6 +90,7 @@ def download(
         output_dir (Path | None): Output directory. Defaults to None.
         num_workers (int | None): Number of parallel workers. Defaults to None.
     """
+    from satctl.downloaders import create_downloader
     from satctl.model import SearchParams
     from satctl.sources import create_source, registry
 
@@ -103,7 +104,8 @@ def download(
         output_subdir = output_dir / source_name.lower()
         source = create_source(source_name)
         items = source.search(params=search_params)
-        source.download(items, destination=output_subdir, num_workers=num_workers)
+        downloader = create_downloader(source_name, authenticator=source.authenticator)
+        source.download(items, destination=output_subdir, downloader=downloader, num_workers=num_workers)
 
 
 @app.command()

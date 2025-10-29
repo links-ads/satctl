@@ -12,6 +12,7 @@ from pyresample.geometry import AreaDefinition, SwathDefinition
 from satpy.scene import Scene
 from shapely import Polygon
 
+from satctl.auth import Authenticator
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProgressEventType, SearchParams
 from satctl.progress.events import emit_event
@@ -26,7 +27,7 @@ class DataSource(ABC):
     def __init__(
         self,
         name: str,
-        downloader: Downloader,
+        authenticator: Authenticator,
         default_resolution: int | None = None,
         default_composite: str | None = None,
     ):
@@ -34,12 +35,12 @@ class DataSource(ABC):
 
         Args:
             name (str): Source name identifier
-            downloader (Downloader): Downloader instance for retrieving files
+            authenticator (Authenticator): Authenticator instance for credential management
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             default_composite (str | None): Default composite/dataset to load. Defaults to None.
         """
         self.source_name = name
-        self.downloader = downloader
+        self.authenticator = authenticator
         self.default_composite = default_composite
         self.default_resolution = default_resolution
         self.reader = None
@@ -107,12 +108,14 @@ class DataSource(ABC):
         self,
         item: Granule,
         destination: Path,
+        downloader: Downloader,
     ) -> bool:
         """Download a single granule.
 
         Args:
             item (Granule): Granule to download
             destination (Path): Base destination directory
+            downloader (Downloader): Downloader instance to use for downloading
 
         Returns:
             bool: True if download succeeded, False otherwise
@@ -142,10 +145,23 @@ class DataSource(ABC):
         """
         ...
 
-    def get_downloader_init_kwargs(self) -> dict[str, Any]:
+    def _ensure_authenticated(self) -> bool:
+        """Ensure authenticator has valid credentials.
+
+        Returns:
+            bool: True if authenticated, False otherwise
+        """
+        if hasattr(self.authenticator, "ensure_authenticated"):
+            return self.authenticator.ensure_authenticated()
+        return True
+
+    def get_downloader_init_kwargs(self, downloader: Downloader) -> dict[str, Any]:
         """Hook method for subclasses to provide downloader initialization arguments.
 
         Override this method in subclasses to pass custom arguments to downloader.init().
+
+        Args:
+            downloader (Downloader): The downloader instance being initialized
 
         Returns:
             dict[str, Any]: Keyword arguments to pass to downloader.init()
@@ -156,6 +172,7 @@ class DataSource(ABC):
         self,
         items: Granule | list[Granule],
         destination: Path,
+        downloader: Downloader,
         num_workers: int | None = None,
     ) -> tuple[list, list]:
         """Download one or more granules with parallel processing.
@@ -163,6 +180,7 @@ class DataSource(ABC):
         Args:
             items (Granule | list[Granule]): Single granule or list of granules to download
             destination (Path): Base destination directory
+            downloader (Downloader): Downloader instance to use for downloading
             num_workers (int | None): Number of parallel workers. Defaults to 1.
 
         Returns:
@@ -184,11 +202,14 @@ class DataSource(ABC):
             total_items=len(items),
             description=self.collections[0],
         )
-        self.downloader.init(**self.get_downloader_init_kwargs())
+        # Initialize downloader
+        downloader.init(**self.get_downloader_init_kwargs(downloader))
         executor = None
         try:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future_to_item_map = {executor.submit(self.download_item, item, destination): item for item in items}
+                future_to_item_map = {
+                    executor.submit(self.download_item, item, destination, downloader): item for item in items
+                }
                 for future in as_completed(future_to_item_map):
                     item = future_to_item_map[future]
                     result = future.result()

@@ -9,6 +9,8 @@ from typing import cast
 from pydantic import BaseModel
 from pystac_client import Client
 
+
+from satctl.auth import Authenticator
 from satctl.downloaders import Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
@@ -34,7 +36,7 @@ class Sentinel3Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -47,8 +49,7 @@ class Sentinel3Source(DataSource):
         Args:
             collection_name (str): Name of the Sentinel-3 collection
             reader (str): Satpy reader name for this product type
-            downloader (Downloader): Downloader instance for file retrieval
-            stac_url (str): STAC catalog URL for searching
+            authenticator (Authenticator): Authenticator instance for credential management            stac_url (str): STAC catalog URL for searching
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
@@ -57,7 +58,7 @@ class Sentinel3Source(DataSource):
         """
         super().__init__(
             collection_name,
-            downloader=downloader,
+            authenticator=authenticator,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
@@ -162,7 +163,7 @@ class Sentinel3Source(DataSource):
             if asset.media_type == "application/xml":
                 assert name == "xfdumanifest"
 
-    def download_item(self, item: Granule, destination: Path) -> bool:
+    def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download single Sentinel-3 item and extract to destination.
 
         Downloads the product ZIP file, extracts it, saves metadata, and removes the ZIP.
@@ -178,7 +179,8 @@ class Sentinel3Source(DataSource):
         self.validate(item)
         zip_asset = cast(S3Asset, item.assets["product"])
         local_file = destination / f"{item.granule_id}.zip"
-        if result := self.downloader.download(
+
+        if result := downloader.download(
             uri=zip_asset.href,
             destination=local_file,
             item_id=item.granule_id,
@@ -245,7 +247,7 @@ class SLSTRSource(Sentinel3Source):
     def __init__(
         self,
         *,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str = "all_bands",
         default_resolution: int = 1000,
@@ -256,8 +258,7 @@ class SLSTRSource(Sentinel3Source):
         """Initialize Sentinel-3 SLSTR data source.
 
         Args:
-            downloader (Downloader): Downloader instance for file retrieval
-            stac_url (str): STAC catalog URL for searching
+            authenticator (Authenticator): Authenticator instance for credential management            stac_url (str): STAC catalog URL for searching
             default_composite (str): Default composite/band to load. Defaults to "all_bands".
             default_resolution (int): Default resolution in meters. Defaults to 1000.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
@@ -269,7 +270,7 @@ class SLSTRSource(Sentinel3Source):
             reader="slstr_l1b",
             default_composite=default_composite,
             default_resolution=default_resolution,
-            downloader=downloader,
+            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,
@@ -311,7 +312,7 @@ class OLCISource(Sentinel3Source):
     def __init__(
         self,
         *,
-        downloader: Downloader,
+        authenticator: Authenticator,
         stac_url: str,
         default_composite: str = "all_bands",
         default_resolution: int = 300,
@@ -322,8 +323,7 @@ class OLCISource(Sentinel3Source):
         """Initialize Sentinel-3 OLCI data source.
 
         Args:
-            downloader (Downloader): Downloader instance for file retrieval
-            stac_url (str): STAC catalog URL for searching
+            authenticator (Authenticator): Authenticator instance for credential management            stac_url (str): STAC catalog URL for searching
             default_composite (str): Default composite/band to load. Defaults to "all_bands".
             default_resolution (int): Default resolution in meters. Defaults to 300.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
@@ -335,7 +335,7 @@ class OLCISource(Sentinel3Source):
             reader="olci_l1b",
             default_composite=default_composite,
             default_resolution=default_resolution,
-            downloader=downloader,
+            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,

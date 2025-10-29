@@ -7,7 +7,8 @@ from typing import Literal, TypedDict
 
 import xarray as xr
 
-from satctl.downloaders import Downloader
+
+from satctl.auth import Authenticator
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
     DAY_NIGHT_CONDITIONS,
@@ -50,7 +51,7 @@ class VIIRSSource(EarthDataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
+        authenticator: Authenticator,
         short_name: str,
         version: str | None = None,
         default_composite: str | None = None,
@@ -62,8 +63,7 @@ class VIIRSSource(EarthDataSource):
         Args:
             collection_name (str): Name of the VIIRS collection
             reader (str): Satpy reader name for this product type
-            downloader (Downloader): Downloader instance for file retrieval
-            short_name (str): NASA CMR short name for the dataset
+            authenticator (Authenticator): Authenticator instance for credential management            short_name (str): NASA CMR short name for the dataset
             version (str | None): Dataset version. Defaults to None.
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
@@ -72,7 +72,7 @@ class VIIRSSource(EarthDataSource):
         super().__init__(
             collection_name,
             reader=reader,
-            downloader=downloader,
+            authenticator=authenticator,
             short_name=short_name,
             version=version,
             default_composite=default_composite,
@@ -248,7 +248,7 @@ class VIIRSL1BSource(VIIRSSource):
     def __init__(
         self,
         *,
-        downloader: Downloader,
+        authenticator: Authenticator,
         satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -256,8 +256,7 @@ class VIIRSL1BSource(VIIRSSource):
         """Initialize VIIRS Level 1B data source.
 
         Args:
-            downloader (Downloader): Downloader instance for file retrieval
-            satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
+            authenticator (Authenticator): Authenticator instance for credential management            satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
             product_type (list[Literal["mod", "img"]]): List of product types to search
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
@@ -286,7 +285,7 @@ class VIIRSL1BSource(VIIRSSource):
             reader="viirs_l1b",
             default_composite="automatic",
             default_resolution=primary["resolution"],
-            downloader=downloader,
+            authenticator=authenticator,
             short_name=primary["short_name"],
             version=primary["version"],
             search_limit=search_limit,

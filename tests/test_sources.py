@@ -104,7 +104,7 @@ class IntegrationTestBase:
             AssertionError: If source is not properly configured
         """
         assert source is not None, "Source should be created"
-        assert source.downloader is not None, "Downloader should be set"
+        assert source.authenticator is not None, "Authenticator should be set"
 
     @classmethod
     def verify_search_results(cls, granules: list[Granule], min_count: int = 1) -> None:
@@ -260,15 +260,11 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             earthdata_authenticator: Fixture providing EarthData authenticator
         """
         try:
-            from satctl.downloaders import HTTPDownloader
             from satctl.sources.viirs import VIIRSL1BSource
-
-            # Create and initialize downloader
-            downloader = HTTPDownloader(authenticator=earthdata_authenticator)
 
             # Create VIIRS source with NPP satellite and M-band product (750m resolution)
             source = VIIRSL1BSource(
-                downloader=downloader,
+                authenticator=earthdata_authenticator,
                 satellite=["vnp"],  # NPP satellite
                 product_type=["mod"],  # M-bands (750m)
                 search_limit=1,  # Limit results for testing
@@ -320,6 +316,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
     def test_download(
         self,
         temp_download_dir,
+        earthdata_authenticator,
     ) -> None:
         """Test downloading a VIIRS granule.
 
@@ -332,6 +329,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
+            earthdata_authenticator: Fixture providing EarthData authenticator
         """
         self.check_prerequisites("auth", "search")
 
@@ -339,7 +337,10 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            success, failure = self.source.download(self.granules, temp_download_dir)
+            from satctl.downloaders import HTTPDownloader
+
+            downloader = HTTPDownloader(authenticator=earthdata_authenticator)
+            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
@@ -430,15 +431,11 @@ class TestSLSTRIntegration(IntegrationTestBase):
             odata_authenticator: Fixture providing Copernicus OData authenticator
         """
         try:
-            from satctl.downloaders import HTTPDownloader
             from satctl.sources.sentinel3 import SLSTRSource
-
-            # Create downloader with Copernicus auth
-            downloader = HTTPDownloader(authenticator=odata_authenticator)
 
             # Create SLSTR source
             source = SLSTRSource(
-                downloader=downloader,
+                authenticator=odata_authenticator,
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -488,6 +485,7 @@ class TestSLSTRIntegration(IntegrationTestBase):
     def test_download(
         self,
         temp_download_dir,
+        odata_authenticator,
     ) -> None:
         """Test downloading a SLSTR granule.
 
@@ -500,6 +498,7 @@ class TestSLSTRIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
+            odata_authenticator: Fixture providing Copernicus OData authenticator
         """
         self.check_prerequisites("auth", "search")
 
@@ -507,7 +506,10 @@ class TestSLSTRIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            success, failure = self.source.download(self.granules, temp_download_dir)
+            from satctl.downloaders import HTTPDownloader
+
+            downloader = HTTPDownloader(authenticator=odata_authenticator)
+            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
@@ -598,15 +600,11 @@ class TestOLCIIntegration(IntegrationTestBase):
             odata_authenticator: Fixture providing Copernicus OData authenticator
         """
         try:
-            from satctl.downloaders import HTTPDownloader
             from satctl.sources.sentinel3 import OLCISource
-
-            # Create downloader with Copernicus auth
-            downloader = HTTPDownloader(authenticator=odata_authenticator)
 
             # Create OLCI source
             source = OLCISource(
-                downloader=downloader,
+                authenticator=odata_authenticator,
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -656,6 +654,7 @@ class TestOLCIIntegration(IntegrationTestBase):
     def test_download(
         self,
         temp_download_dir,
+        odata_authenticator,
     ) -> None:
         """Test downloading an OLCI granule.
 
@@ -668,6 +667,7 @@ class TestOLCIIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
+            odata_authenticator: Fixture providing Copernicus OData authenticator
         """
         self.check_prerequisites("auth", "search")
 
@@ -675,7 +675,10 @@ class TestOLCIIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            success, failure = self.source.download(self.granules, temp_download_dir)
+            from satctl.downloaders import HTTPDownloader
+
+            downloader = HTTPDownloader(authenticator=odata_authenticator)
+            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
@@ -736,6 +739,7 @@ class TestOLCIIntegration(IntegrationTestBase):
         # Store all output files for inspection if needed
         type(self).output_files = all_output_paths
 
+
 @pytest.mark.integration
 @pytest.mark.requires_credentials
 @pytest.mark.slow
@@ -767,18 +771,11 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
             copernicus_config: Fixture providing Copernicus configuration
         """
         try:
-            from satctl.downloaders import S3Downloader
             from satctl.sources.sentinel2 import Sentinel2L2ASource
-
-            # Create downloader with S3 auth
-            downloader = S3Downloader(
-                authenticator=s3_authenticator,
-                endpoint_url=copernicus_config["endpoint_url"],
-            )
 
             # Create Sentinel-2 L2A source
             source = Sentinel2L2ASource(
-                downloader=downloader,
+                authenticator=s3_authenticator,
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -828,6 +825,8 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
     def test_download(
         self,
         temp_download_dir,
+        s3_authenticator,
+        copernicus_config,
     ) -> None:
         """Test downloading a Sentinel-2 L2A granule.
 
@@ -840,6 +839,8 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
+            s3_authenticator: Fixture providing Copernicus S3 authenticator
+            copernicus_config: Fixture providing Copernicus configuration
         """
         self.check_prerequisites("auth", "search")
 
@@ -847,7 +848,10 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            success, failure = self.source.download(self.granules, temp_download_dir)
+            from satctl.downloaders import S3Downloader
+
+            downloader = S3Downloader(authenticator=s3_authenticator, endpoint_url=copernicus_config["endpoint_url"])
+            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
@@ -908,6 +912,7 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
         # Store all output files for inspection if needed
         type(self).output_files = all_output_paths
 
+
 @pytest.mark.integration
 @pytest.mark.requires_credentials
 @pytest.mark.slow
@@ -939,18 +944,11 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
             copernicus_config: Fixture providing Copernicus configuration
         """
         try:
-            from satctl.downloaders import S3Downloader
             from satctl.sources.sentinel2 import Sentinel2L1CSource
-
-            # Create downloader with S3 auth
-            downloader = S3Downloader(
-                authenticator=s3_authenticator,
-                endpoint_url=copernicus_config["endpoint_url"],
-            )
 
             # Create Sentinel-2 L1C source
             source = Sentinel2L1CSource(
-                downloader=downloader,
+                authenticator=s3_authenticator,
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -1000,6 +998,8 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
     def test_download(
         self,
         temp_download_dir,
+        s3_authenticator,
+        copernicus_config,
     ) -> None:
         """Test downloading a Sentinel-2 L1C granule.
 
@@ -1012,6 +1012,8 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
+            s3_authenticator: Fixture providing Copernicus S3 authenticator
+            copernicus_config: Fixture providing Copernicus configuration
         """
         self.check_prerequisites("auth", "search")
 
@@ -1019,7 +1021,10 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            success, failure = self.source.download(self.granules, temp_download_dir)
+            from satctl.downloaders import S3Downloader
+
+            downloader = S3Downloader(authenticator=s3_authenticator, endpoint_url=copernicus_config["endpoint_url"])
+            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
@@ -1080,6 +1085,7 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
         # Store all output files for inspection if needed
         type(self).output_files = all_output_paths
 
+
 @pytest.mark.integration
 @pytest.mark.requires_credentials
 @pytest.mark.slow
@@ -1109,15 +1115,11 @@ class TestMODISL1BIntegration(IntegrationTestBase):
             earthdata_authenticator: Fixture providing EarthData authenticator
         """
         try:
-            from satctl.downloaders import HTTPDownloader
             from satctl.sources.modis import MODISL1BSource
-
-            # Create and initialize downloader
-            downloader = HTTPDownloader(authenticator=earthdata_authenticator)
 
             # Create MODIS source with Terra satellite and 1km resolution
             source = MODISL1BSource(
-                downloader=downloader,
+                authenticator=earthdata_authenticator,
                 platform=["mod"],  # Terra satellite
                 resolution=["1km"],  # 1km resolution
                 search_limit=1,  # Limit results for testing
@@ -1169,6 +1171,7 @@ class TestMODISL1BIntegration(IntegrationTestBase):
     def test_download(
         self,
         temp_download_dir,
+        earthdata_authenticator,
     ) -> None:
         """Test downloading a MODIS granule.
 
@@ -1181,6 +1184,7 @@ class TestMODISL1BIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
+            earthdata_authenticator: Fixture providing EarthData authenticator
         """
         self.check_prerequisites("auth", "search")
 
@@ -1188,7 +1192,10 @@ class TestMODISL1BIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            success, failure = self.source.download(self.granules, temp_download_dir)
+            from satctl.downloaders import HTTPDownloader
+
+            downloader = HTTPDownloader(authenticator=earthdata_authenticator)
+            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)

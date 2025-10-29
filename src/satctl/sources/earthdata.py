@@ -9,6 +9,7 @@ from typing import Any
 import earthaccess
 from pydantic import BaseModel
 
+from satctl.auth import Authenticator
 from satctl.auth.earthdata import EarthDataAuthenticator
 from satctl.downloaders import Downloader
 from satctl.downloaders.http import HTTPDownloader
@@ -88,7 +89,7 @@ class EarthDataSource(DataSource):
         collection_name: str,
         *,
         reader: str,
-        downloader: Downloader,
+        authenticator: Authenticator,
         short_name: str,
         version: str | None = None,
         default_composite: str | None = None,
@@ -100,8 +101,7 @@ class EarthDataSource(DataSource):
         Args:
             collection_name (str): Collection name identifier
             reader (str): Satpy reader name
-            downloader (Downloader): Downloader instance
-            short_name (str): NASA short name for the product
+            authenticator (Authenticator): Authenticator instance for credential management            short_name (str): NASA short name for the product
             version (str | None): Product version. Defaults to None.
             default_composite (str | None): Default composite name. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
@@ -109,7 +109,7 @@ class EarthDataSource(DataSource):
         """
         super().__init__(
             collection_name,
-            downloader=downloader,
+            authenticator=authenticator,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
@@ -254,6 +254,9 @@ class EarthDataSource(DataSource):
         Returns:
             list[Granule]: List of granules for this combination
         """
+        # Ensure authentication before searching (earthaccess requires global auth)
+        self._ensure_authenticated()
+
         search_kwargs: dict[str, Any] = {
             "short_name": short_name,
             "temporal": (params.start.isoformat(), params.end.isoformat()),
@@ -338,18 +341,21 @@ class EarthDataSource(DataSource):
             info=self._parse_item_name(item_id),
         )
 
-    def get_downloader_init_kwargs(self) -> dict[str, Any]:
+    def get_downloader_init_kwargs(self, downloader: Downloader) -> dict[str, Any]:
         """Provide EarthData session to downloader initialization.
+
+        Args:
+            downloader (Downloader): The downloader instance being initialized
 
         Returns:
             dict[str, Any]: Dictionary with session keyword argument if applicable
         """
         # Only provide session if we have HTTPDownloader with EarthDataAuthenticator
-        if isinstance(self.downloader, HTTPDownloader) and isinstance(self.downloader.auth, EarthDataAuthenticator):
-            return {"session": self.downloader.auth.auth_session}
+        if isinstance(downloader, HTTPDownloader) and isinstance(downloader.auth, EarthDataAuthenticator):
+            return {"session": downloader.auth.auth_session}
         return {}
 
-    def download_item(self, item: Granule, destination: Path) -> bool:
+    def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download both radiance and georeference files for a granule.
 
         Args:
@@ -367,7 +373,7 @@ class EarthDataSource(DataSource):
         radiance_filename = Path(radiance_asset.href).name
         radiance_file = granule_dir / radiance_filename
 
-        radiance_success = self.downloader.download(
+        radiance_success = downloader.download(
             uri=radiance_asset.href,
             destination=radiance_file,
             item_id=item.granule_id,
@@ -382,7 +388,7 @@ class EarthDataSource(DataSource):
         georeference_filename = Path(georeference_asset.href).name
         georeference_file = granule_dir / georeference_filename
 
-        georeference_success = self.downloader.download(
+        georeference_success = downloader.download(
             uri=georeference_asset.href,
             destination=georeference_file,
             item_id=item.granule_id,
