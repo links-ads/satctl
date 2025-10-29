@@ -74,6 +74,22 @@ sources:
     platform: ["mod"]
     resolution: ["qkm", "hkm", "1km"]
 
+  mtg:
+    authenticator: "eumetsat"
+    downloader: "http"
+    search_limit: 2
+    collection_name: "EO:EUM:DAT:0662"
+    reader: "fci_l1c_nc"
+    default_composite: "natural_color"
+
+  s1grd:
+    authenticator: "s3"
+    downloader: "s3"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+    download_pool_conns: 1
+    download_pool_size: 1
+    
 writer:
   geotiff:
     compress: lzw
