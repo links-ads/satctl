@@ -484,7 +484,7 @@ class Sentinel1GRDSource(Sentinel1Source):
         *,
         downloader: Downloader,
         stac_url: str,
-        composite: str = "true_color",
+        composite: str = "sar_rgb",
         search_limit: int = 100,
         download_pool_conns: int = 10,
         download_pool_size: int = 2,
