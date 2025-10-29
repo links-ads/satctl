@@ -81,5 +81,4 @@ __all__ = [
     "VIIRSL1BSource",
     "MODISL1BSource",
     "create_source",
-    "create_downloader",
 ]
