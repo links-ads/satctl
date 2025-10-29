@@ -89,7 +89,8 @@ class EarthDataSource(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,        short_name: str,
+        authenticator: Authenticator,
+        short_name: str,
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -108,7 +109,8 @@ class EarthDataSource(DataSource):
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,            default_composite=default_composite,
+            authenticator=authenticator,
+            default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader

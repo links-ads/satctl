@@ -34,7 +34,8 @@ class MTGSource(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,        default_composite: str | None = None,
+        authenticator: Authenticator,
+        default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
         download_pool_conns: int = 10,
@@ -53,7 +54,8 @@ class MTGSource(DataSource):
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,            default_composite=default_composite,
+            authenticator=authenticator,
+            default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader

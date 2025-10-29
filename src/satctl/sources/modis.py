@@ -7,10 +7,8 @@ from typing import Literal, TypedDict
 
 from pyhdf.SD import SD, SDC
 
-from typing import Any
 
 from satctl.auth import Authenticator
-from satctl.downloaders import Downloader
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
     DAY_NIGHT_CONDITIONS,
@@ -53,7 +51,8 @@ class MODISSource(EarthDataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,        short_name: str,
+        authenticator: Authenticator,
+        short_name: str,
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -73,7 +72,8 @@ class MODISSource(EarthDataSource):
         super().__init__(
             collection_name,
             reader=reader,
-            authenticator=authenticator,            short_name=short_name,
+            authenticator=authenticator,
+            short_name=short_name,
             version=version,
             default_composite=default_composite,
             default_resolution=default_resolution,
@@ -273,7 +273,8 @@ class MODISL1BSource(MODISSource):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,        platform: list[Literal["mod", "myd"]],
+        authenticator: Authenticator,
+        platform: list[Literal["mod", "myd"]],
         resolution: list[Literal["qkm", "hkm", "1km"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
@@ -309,7 +310,8 @@ class MODISL1BSource(MODISSource):
             reader="modis_l1b",
             default_composite="automatic",
             default_resolution=primary["resolution_meters"],
-            authenticator=authenticator,            short_name=primary["short_name"],
+            authenticator=authenticator,
+            short_name=primary["short_name"],
             version=primary["version"],
             search_limit=search_limit,
         )

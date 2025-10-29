@@ -207,7 +207,9 @@ class DataSource(ABC):
         executor = None
         try:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future_to_item_map = {executor.submit(self.download_item, item, destination, downloader): item for item in items}
+                future_to_item_map = {
+                    executor.submit(self.download_item, item, destination, downloader): item for item in items
+                }
                 for future in as_completed(future_to_item_map):
                     item = future_to_item_map[future]
                     result = future.result()

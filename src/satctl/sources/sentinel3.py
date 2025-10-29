@@ -9,7 +9,6 @@ from typing import cast
 from pydantic import BaseModel
 from pystac_client import Client
 
-from typing import Any
 
 from satctl.auth import Authenticator
 from satctl.downloaders import Downloader
@@ -37,7 +36,8 @@ class Sentinel3Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,        stac_url: str,
+        authenticator: Authenticator,
+        stac_url: str,
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -58,7 +58,8 @@ class Sentinel3Source(DataSource):
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,            default_composite=default_composite,
+            authenticator=authenticator,
+            default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader
@@ -246,7 +247,8 @@ class SLSTRSource(Sentinel3Source):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,        stac_url: str,
+        authenticator: Authenticator,
+        stac_url: str,
         default_composite: str = "all_bands",
         default_resolution: int = 1000,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -268,7 +270,8 @@ class SLSTRSource(Sentinel3Source):
             reader="slstr_l1b",
             default_composite=default_composite,
             default_resolution=default_resolution,
-            authenticator=authenticator,            stac_url=stac_url,
+            authenticator=authenticator,
+            stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,
             download_pool_size=download_pool_size,
@@ -309,7 +312,8 @@ class OLCISource(Sentinel3Source):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,        stac_url: str,
+        authenticator: Authenticator,
+        stac_url: str,
         default_composite: str = "all_bands",
         default_resolution: int = 300,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -331,7 +335,8 @@ class OLCISource(Sentinel3Source):
             reader="olci_l1b",
             default_composite=default_composite,
             default_resolution=default_resolution,
-            authenticator=authenticator,            stac_url=stac_url,
+            authenticator=authenticator,
+            stac_url=stac_url,
             search_limit=search_limit,
             download_pool_conns=download_pool_conns,
             download_pool_size=download_pool_size,

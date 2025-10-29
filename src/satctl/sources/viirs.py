@@ -7,10 +7,8 @@ from typing import Literal, TypedDict
 
 import xarray as xr
 
-from typing import Any
 
 from satctl.auth import Authenticator
-from satctl.downloaders import Downloader
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
     DAY_NIGHT_CONDITIONS,
@@ -53,7 +51,8 @@ class VIIRSSource(EarthDataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,        short_name: str,
+        authenticator: Authenticator,
+        short_name: str,
         version: str | None = None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
@@ -73,7 +72,8 @@ class VIIRSSource(EarthDataSource):
         super().__init__(
             collection_name,
             reader=reader,
-            authenticator=authenticator,            short_name=short_name,
+            authenticator=authenticator,
+            short_name=short_name,
             version=version,
             default_composite=default_composite,
             default_resolution=default_resolution,
@@ -248,7 +248,8 @@ class VIIRSL1BSource(VIIRSSource):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,        satellite: list[Literal["vnp", "jp1", "jp2"]],
+        authenticator: Authenticator,
+        satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
@@ -284,7 +285,8 @@ class VIIRSL1BSource(VIIRSSource):
             reader="viirs_l1b",
             default_composite="automatic",
             default_resolution=primary["resolution"],
-            authenticator=authenticator,            short_name=primary["short_name"],
+            authenticator=authenticator,
+            short_name=primary["short_name"],
             version=primary["version"],
             search_limit=search_limit,
         )
