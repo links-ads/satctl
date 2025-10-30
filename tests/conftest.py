@@ -1,6 +1,7 @@
 """Pytest configuration and fixtures for integration tests."""
 
 import logging
+import multiprocessing as mp
 import os
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,8 @@ from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
 
+if mp.get_start_method(allow_none=True) != "spawn":
+    mp.set_start_method("spawn", force=True)
 # Load .env file BEFORE any imports that might use satpy
 # This must happen at module import time, not in a fixture, because satpy
 # reads SATPY_CONFIG_PATH when it's first imported (during test collection)

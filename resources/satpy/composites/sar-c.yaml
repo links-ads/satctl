@@ -1,0 +1,39 @@
+sensor_name: sar/sar-c
+
+modifiers: {}
+
+composites:
+
+  # Two-band composite (VV, VH)
+  s1_dual_pol:
+    description: "Sentinel-1 GRD dual-polarization composite (VV, VH)"
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+      - name: measurement
+        polarization: vv
+        calibration: sigma_nought
+      - name: measurement
+        polarization: vh
+        calibration: sigma_nought
+    standard_name: sar_dual_pol
+
+  # RGB false color composite (common for SAR visualization)
+  s1_rgb:
+    description: "Sentinel-1 RGB false color (VV, VH, VV/VH ratio)"
+    compositor: !!python/name:satctl.composites.MultiBandCompositor
+    prerequisites:
+      - name: measurement
+        polarization: vv
+        calibration: sigma_nought
+      - name: measurement
+        polarization: vh
+        calibration: sigma_nought
+      - compositor: !!python/name:satpy.composites.RatioCompositor
+        prerequisites:
+          - name: measurement
+            polarization: vv
+            calibration: sigma_nought
+          - name: measurement
+            polarization: vh
+            calibration: sigma_nought
+    standard_name: sar_rgb
