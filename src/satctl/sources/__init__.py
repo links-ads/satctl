@@ -79,8 +79,7 @@ __all__ = [
     "SLSTRSource",
     "Sentinel2L2ASource",
     "Sentinel2L1CSource",
-    "Sentinel1GRDSource"
-    "MTGSource",
+    "Sentinel1GRDSourceMTGSource",
     "VIIRSL1BSource",
     "MODISL1BSource",
     "create_source",

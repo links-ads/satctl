@@ -1256,6 +1256,7 @@ class TestMODISL1BIntegration(IntegrationTestBase):
         # Store all output files for inspection if needed
         type(self).output_files = all_output_paths
 
+
 @pytest.mark.integration
 @pytest.mark.requires_credentials
 @pytest.mark.slow
@@ -1267,7 +1268,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
     - Search for Sentinel-1 GRD granules via STAC
     - Download granule files and reconstruct SAFE structure
     - Convert to GeoTIFF using Satpy with sar-c_safe reader
-    
+
     Note: Sentinel-1 GRD products contain dual-polarization SAR data (typically VV+VH)
     at ~20m resolution in IW mode. The SAFE directory structure must be preserved
     for the sar-c_safe reader to work correctly.
@@ -1352,12 +1353,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             type(self).mark_failure("search", e)
             raise
 
-    def test_download(
-        self,
-        temp_download_dir,
-        s3_authenticator,
-        copernicus_config
-    ) -> None:
+    def test_download(self, temp_download_dir, s3_authenticator, copernicus_config) -> None:
         """Test downloading a Sentinel-1 GRD granule.
 
         This test:
@@ -1393,19 +1389,19 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
                 assert item.local_path.suffix == ".SAFE", (
                     f"Downloaded directory should have .SAFE extension, got {item.local_path}"
                 )
-                
+
                 # Verify SAFE structure components exist
                 manifest = item.local_path / "manifest.safe"
                 assert manifest.exists(), f"manifest.safe should exist at {manifest}"
-                
+
                 measurement_dir = item.local_path / "measurement"
                 annotation_dir = item.local_path / "annotation"
-                
+
                 # These directories should exist if assets were downloaded correctly
                 if measurement_dir.exists():
                     measurement_files = list(measurement_dir.glob("*.tiff"))
                     log.info(f"Found {len(measurement_files)} measurement file(s)")
-                    
+
                 if annotation_dir.exists():
                     annotation_files = list(annotation_dir.glob("*.xml"))
                     log.info(f"Found {len(annotation_files)} annotation file(s)")
@@ -1443,6 +1439,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             geotiff_writer: Fixture providing configured GeoTIFF writer
         """
         from dotenv import load_dotenv
+
         load_dotenv()
         self.check_prerequisites("auth", "search", "download")
 
@@ -1450,7 +1447,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             pytest.skip("Skipping convert: no downloaded item")
 
         log.info(f"Converting {len(self.downloaded_item)} Sentinel-1 GRD granule(s)")
-        
+
         # Convert granule(s) to GeoTIFF using save()
         success, failure = self.source.save(
             self.downloaded_item,
@@ -1475,7 +1472,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             # SAR GeoTIFFs should typically be single or dual-band
             # (depending on whether it's VV only, VH only, or VV+VH composite)
             log.info(f"SAR output: {output_path.name}")
-            
+
             # You could add additional verification here, e.g.:
             # - Check that backscatter values are in reasonable range
             # - Verify CRS is correct

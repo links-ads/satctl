@@ -23,22 +23,23 @@ log = logging.getLogger(__name__)
 
 class S1Asset(BaseModel):
     """Model for Sentinel-1 STAC asset.
-    
+
     Attributes:
         href: URL to the asset file
         media_type: MIME type of the asset (optional)
     """
+
     href: str
     media_type: str | None
 
 
 class Sentinel1Source(DataSource):
     """Source for Sentinel-1 SAR products.
-    
+
     This class handles access to Sentinel-1 data via STAC catalogs, managing
     the download and processing of SAR data in SAFE format. It preserves the
     SAFE directory structure required by the satpy sar-c_safe reader.
-    
+
     The SAFE (Standard Archive Format for Europe) structure includes:
     - manifest.safe: Product metadata
     - measurement/: SAR backscatter data (GeoTIFF)
@@ -49,20 +50,20 @@ class Sentinel1Source(DataSource):
 
     # Required assets for SAR processing - both polarizations and their metadata
     REQUIRED_ASSETS: set[str] = {
-        "vv",                      # VV polarization measurement data
-        "vh",                      # VH polarization measurement data
-        "schema-noise-vv",         # Noise calibration metadata for VV
-        "schema-noise-vh",         # Noise calibration metadata for VH
-        "schema-product-vv",       # Product metadata for VV
-        "schema-product-vh",       # Product metadata for VH
-        "schema-calibration-vv",   # Radiometric calibration metadata for VV
-        "schema-calibration-vh",   # Radiometric calibration metadata for VH
+        "vv",  # VV polarization measurement data
+        "vh",  # VH polarization measurement data
+        "schema-noise-vv",  # Noise calibration metadata for VV
+        "schema-noise-vh",  # Noise calibration metadata for VH
+        "schema-product-vv",  # Product metadata for VV
+        "schema-product-vh",  # Product metadata for VH
+        "schema-calibration-vv",  # Radiometric calibration metadata for VV
+        "schema-calibration-vh",  # Radiometric calibration metadata for VH
     }
 
     # Optional metadata assets for visualization and validation
     METADATA_ASSETS: set[str] = {
         "safe_manifest",  # SAFE manifest file (required by sar-c_safe reader)
-        "thumbnail",      # Quick-look preview image
+        "thumbnail",  # Quick-look preview image
     }
 
     def __init__(
@@ -108,7 +109,7 @@ class Sentinel1Source(DataSource):
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo:
         """Parse Sentinel-1 item name into product information.
-        
+
         This method must be implemented by subclasses to handle specific
         product naming conventions (e.g., GRD vs SLC format).
 
@@ -150,7 +151,7 @@ class Sentinel1Source(DataSource):
             datetime=(params.start, params.end),
             max_items=self.search_limit,
         )
-        
+
         # Convert STAC items to internal Granule model
         items = [
             Granule(
@@ -180,7 +181,7 @@ class Sentinel1Source(DataSource):
 
     def get_files(self, item: Granule) -> list[Path | str]:
         """Get list of all files in a downloaded Sentinel-1 SAFE directory.
-        
+
         The sar-c_safe reader requires access to all files in the SAFE structure,
         including measurements, annotations, and metadata files.
 
@@ -196,7 +197,7 @@ class Sentinel1Source(DataSource):
         """
         if item.local_path is None:
             raise ValueError("Local path is missing. Did you download this granule?")
-        
+
         # Verify SAFE structure by checking for manifest file
         manifest_file = item.local_path / "manifest.safe"
 
@@ -224,10 +225,10 @@ class Sentinel1Source(DataSource):
             asset = cast(S1Asset, asset)
             # Sentinel-1 assets are typically Cloud-Optimized GeoTIFFs, XMLs, PNGs, or ZIPs
             assert asset.media_type in (
-                'image/tiff; application=geotiff; profile=cloud-optimized',
-                'image/png',
-                'application/zip',
-                'application/xml'
+                "image/tiff; application=geotiff; profile=cloud-optimized",
+                "image/png",
+                "application/zip",
+                "application/xml",
             ), f"Unexpected media type for asset {name}: {asset.media_type}"
 
     def load_scene(
@@ -239,7 +240,7 @@ class Sentinel1Source(DataSource):
         **scene_options: dict[str, Any],
     ) -> Scene:
         """Load a Sentinel-1 scene into a Satpy Scene object.
-        
+
         Note: The 'calibration' parameter is currently unused but retained for
         API compatibility. SAR calibration is typically specified in the dataset
         name or composite definition (e.g., 'sigma_nought', 'beta_nought').
@@ -260,18 +261,16 @@ class Sentinel1Source(DataSource):
         """
         if not datasets:
             if self.default_composite is None:
-                raise ValueError(
-                    "Please provide the source with a default composite, or provide custom composites"
-                )
+                raise ValueError("Please provide the source with a default composite, or provide custom composites")
             datasets = [self.default_composite]
-        
+
         # Create scene with all files in SAFE directory
         scene = Scene(
             filenames=self.get_files(item),
             reader=self.reader,
             reader_kwargs=scene_options,
         )
-        
+
         # Load datasets (calibration is handled by dataset definition, not this parameter)
         # TODO: Remove unused calibration parameter in future version
         scene.load(datasets, calibration=calibration)
@@ -279,10 +278,10 @@ class Sentinel1Source(DataSource):
 
     def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download Sentinel-1 assets and reconstruct SAFE directory structure.
-        
+
         Downloads only the required assets (measurements and metadata) and organizes
         them into a valid SAFE directory structure that the sar-c_safe reader can process.
-        
+
         The SAFE structure is reconstructed by:
         1. Extracting relative paths from S3 URIs (.SAFE/measurement/*, .SAFE/annotation/*)
         2. Creating the directory hierarchy (measurement/, annotation/, etc.)
@@ -319,15 +318,15 @@ class Sentinel1Source(DataSource):
             href_parts = asset.href.split(".SAFE/")
             if len(href_parts) > 1 and ("measurement" in href_parts[1] or "annotation" in href_parts[1]):
                 # Preserve the SAFE structure for proper sar-c_safe reader support
-                relative_path = href_parts[1] 
+                relative_path = href_parts[1]
                 target_file = local_path / relative_path
             else:
                 # Fallback to flat structure if pattern not found
                 target_file = local_path / (asset_name + Path(asset.href).suffix)
-            
+
             # Create subdirectories (measurement/, annotation/, etc.)
             target_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             result = downloader.download(
                 uri=asset.href,
                 destination=target_file,
@@ -371,7 +370,7 @@ class Sentinel1Source(DataSource):
             item.to_file(local_path)
         else:
             log.warning("Failed to download all required assets for: %s", item.granule_id)
-        
+
         return all_success
 
     def save_item(
@@ -383,14 +382,14 @@ class Sentinel1Source(DataSource):
         force: bool = False,
     ) -> dict[str, list]:
         """Process and save Sentinel-1 granule to output files.
-        
+
         Workflow:
         1. Validate inputs (local files exist, datasets specified)
         2. Load scene with SAR data using sar-c_safe reader
         3. Define target area (from params or full granule extent)
         4. Resample to target projection and resolution
         5. Write datasets to output files
-        
+
         Args:
             item: Granule to process (must have local_path set)
             destination: Base destination directory for outputs
@@ -412,7 +411,7 @@ class Sentinel1Source(DataSource):
         # Validate that granule was downloaded
         if item.local_path is None or not item.local_path.exists():
             raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-        
+
         # Ensure datasets are specified
         if params.datasets is None and self.default_composite is None:
             raise ValueError("Missing datasets or default composite for storage")
@@ -420,7 +419,7 @@ class Sentinel1Source(DataSource):
         # Parse dataset names and prepare output filenames
         datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
         log.debug("Attempting to save the following datasets: %s", datasets_dict)
-        
+
         # Skip existing files unless force=True (avoids redundant processing)
         if not force:
             for dataset_name, file_name in list(datasets_dict.items()):
@@ -433,7 +432,7 @@ class Sentinel1Source(DataSource):
         # Load scene with requested SAR datasets
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-        
+
         # Define target area for resampling
         if params.area_geometry is not None:
             # User provided AOI - use it with specified CRS and resolution
@@ -451,7 +450,7 @@ class Sentinel1Source(DataSource):
                 source_crs=params.source_crs_obj,
                 resolution=params.resolution,
             )
-        
+
         # Resample to target area
         scene = self.resample(scene, area_def=area_def)
 
@@ -459,7 +458,7 @@ class Sentinel1Source(DataSource):
         paths: dict[str, list] = defaultdict(list)
         output_dir = destination / item.granule_id
         output_dir.mkdir(exist_ok=True, parents=True)
-        
+
         for dataset_name, file_name in datasets_dict.items():
             output_path = output_dir / f"{file_name}.{writer.extension}"
             paths[item.granule_id].append(
@@ -468,18 +467,18 @@ class Sentinel1Source(DataSource):
                     output_path=output_path,
                 )
             )
-        
+
         return paths
 
 
 class Sentinel1GRDSource(Sentinel1Source):
     """Source for Sentinel-1 Ground Range Detected (GRD) products.
-    
+
     GRD products are multi-looked and projected to ground range, suitable
     for most operational SAR applications. They have ~20m spatial resolution
     in IW mode and are available in VV+VH or HH+HV polarizations.
     """
-    
+
     def __init__(
         self,
         *,
@@ -522,7 +521,7 @@ class Sentinel1GRDSource(Sentinel1Source):
         - LLLL: Product level (GRDH, GRDM, etc.)
         - PSSS: Polarization and class (1SDH, 1SDV, etc.)
         - YYYYMMDDTHHMMSS: Sensing start time
-        
+
         Example: S1A_EW_GRDM_1SDH_20250915T081809_20250915T081914_060996_079982_90C1_COG.SAFE.zip
 
         Args:
@@ -538,19 +537,15 @@ class Sentinel1GRDSource(Sentinel1Source):
 
         match = re.match(pattern, name)
         if not match:
-            raise ValueError(
-                f"Invalid Sentinel-1 .SAFE directory format: {name}"
-            )
+            raise ValueError(f"Invalid Sentinel-1 .SAFE directory format: {name}")
 
         groups = match.groups()
-        satellite = groups[0]           # S1A, S1B, or S1C
-        acquisition_mode = groups[1]    # EW (Extra Wide), IW (Interferometric Wide), etc.
-        level = groups[2]               # GRDH (High res), GRDM (Medium res)
-        sensing_time = groups[3]        # Start of acquisition
+        satellite = groups[0]  # S1A, S1B, or S1C
+        acquisition_mode = groups[1]  # EW (Extra Wide), IW (Interferometric Wide), etc.
+        level = groups[2]  # GRDH (High res), GRDM (Medium res)
+        sensing_time = groups[3]  # Start of acquisition
 
-        acquisition_time = datetime.strptime(
-            sensing_time, "%Y%m%dT%H%M%S"
-        ).replace(tzinfo=timezone.utc)
+        acquisition_time = datetime.strptime(sensing_time, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
 
         return ProductInfo(
             instrument="sar",
