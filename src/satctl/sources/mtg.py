@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-import dask
+import dask.config
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
 from satpy.scene import Scene
@@ -132,7 +132,7 @@ class MTGSource(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str, **kwargs) -> Granule:
         """Get specific MTG granule by ID.
 
         Args:
