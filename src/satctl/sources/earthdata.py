@@ -307,38 +307,58 @@ class EarthDataSource(DataSource):
     def _get_granule_by_short_name(self, item_id: str, short_name: str) -> Granule:
         """Fetch a specific granule by ID and short_name.
 
+        Fetches both radiance (level 02) and georeference (level 03) data.
+
         Args:
             item_id (str): The granule ID
             short_name (str): NASA short name (e.g., "MOD02QKM", "VNP02MOD")
 
         Returns:
-            Granule: The requested granule
+            Granule: The requested granule with radiance and georeference assets
 
         Raises:
             ValueError: If granule not found
         """
         try:
-            results = earthaccess.search_data(
+            # Fetch radiance data (level 02)
+            radiance_results = earthaccess.search_data(
                 short_name=short_name,
                 granule_name=item_id,
             )
 
-            if not results:
+            if not radiance_results:
                 raise ValueError(f"No granule found with id: {item_id}")
-            item = results[0]
+            radiance_result = radiance_results[0]
+
+            # Get radiance ID - strip file extension
+            radiance_id_raw = radiance_result["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
+            radiance_id = ".".join(radiance_id_raw.split(".")[:-1])  # Agnostically remove file extension
+
+            # Find matching georeference file (level 03)
+            georeference_id_pattern = self._build_georeference_pattern(radiance_id)
+            georeference_short_name = self._get_georeference_short_name(short_name)
+
+            georeference_results = earthaccess.search_data(
+                short_name=georeference_short_name,
+                granule_name=georeference_id_pattern,
+            )
+
+            if not georeference_results:
+                raise ValueError(f"No georeference data found for granule: {radiance_id}")
+            georeference_result = georeference_results[0]
 
         except Exception as e:
             log.error("Failed to fetch granule %s: %s", item_id, e)
             raise
 
-        # Strip file extension from granule ID
-        item_id = item["umm"]["DataGranule"]["Identifiers"][0]["Identifier"].replace(".hdf", "").replace(".nc", "")
-
         return Granule(
-            granule_id=item_id,
+            granule_id=radiance_id,
             source=self.collections[0],
-            assets=parse_umm_assets(item, EarthDataAsset),
-            info=self._parse_item_name(item_id),
+            assets={
+                "radiance": parse_umm_assets(radiance_result, EarthDataAsset),
+                "georeference": parse_umm_assets(georeference_result, EarthDataAsset),
+            },
+            info=self._parse_item_name(radiance_id),
         )
 
     def get_downloader_init_kwargs(self, downloader: Downloader) -> dict[str, Any]:

@@ -136,15 +136,37 @@ class MTGSource(DataSource):
         """Get specific MTG granule by ID.
 
         Args:
-            item_id (str): Granule identifier
+            item_id (str): Product identifier
+            **kwargs: Additional keyword arguments (unused)
 
         Returns:
             Granule: Requested granule with metadata
 
         Raises:
-            NotImplementedError: Method not yet implemented
+            ValueError: If granule not found
         """
-        raise NotImplementedError()
+        # Ensure authentication before accessing DataStore
+        self._ensure_authenticated()
+        log.debug("Fetching MTG granule by ID: %s", item_id)
+        catalogue = DataStore(self.authenticator.auth_session)
+
+        try:
+            product = catalogue.get_product(self.collections[0], item_id)
+        except Exception as e:
+            log.error("Failed to fetch granule %s: %s", item_id, e)
+            raise ValueError(f"No granule found with id: {item_id}") from e
+
+        return Granule(
+            granule_id=str(product),
+            source=str(product.collection),
+            assets={"product": MTGAsset(href=product.url)},
+            info=ProductInfo(
+                instrument=product.instrument,
+                level="",
+                product_type=product.product_type,
+                acquisition_time=product.sensing_end,
+            ),
+        )
 
     def get_files(self, item: Granule) -> list[Path | str]:
         """Get list of files for a downloaded MTG granule.
