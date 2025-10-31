@@ -39,7 +39,7 @@ class IntegrationTestBase:
         _download_failed: Flag indicating download failure
     """
 
-    source: DataSource | None = None
+    source: DataSource = None  # type: ignore
     granules: list[Granule] = []
     downloaded_item: list[Granule] = []
     output_files: list[Path] = []
@@ -51,7 +51,7 @@ class IntegrationTestBase:
     @classmethod
     def reset_state(cls) -> None:
         """Reset all state variables. Called at start of each test class."""
-        cls.source = None
+        cls.source = None  # type: ignore
         cls.granules = []
         cls.downloaded_item = []
         cls.output_files = []
