@@ -146,15 +146,35 @@ class Sentinel2Source(DataSource):
 
         Args:
             item_id (str): Granule identifier
-            **kwargs (Any): Additional keyword arguments
+            **kwargs (Any): Additional keyword arguments (unused)
 
         Returns:
             Granule: The requested granule
 
         Raises:
-            NotImplementedError: Method not yet implemented
+            ValueError: If granule not found
         """
-        raise NotImplementedError()
+        log.debug("Fetching Sentinel-2 granule by ID: %s", item_id)
+        catalogue = Client.open(self.stac_url)
+
+        try:
+            collection = catalogue.get_collection(self.collections[0])
+            stac_item = collection.get_item(item_id)
+            if stac_item is None:
+                raise ValueError(f"No granule found with id: {item_id}")
+        except Exception as e:
+            log.error("Failed to fetch granule %s: %s", item_id, e)
+            raise ValueError(f"No granule found with id: {item_id}") from e
+
+        return Granule(
+            granule_id=stac_item.id,
+            source=self.collections[0],
+            assets={
+                asset_name: S2Asset(href=asset.href, media_type=asset.media_type)
+                for asset_name, asset in stac_item.assets.items()
+            },
+            info=self._parse_item_name(stac_item.id),
+        )
 
     def get_files(self, item: Granule) -> list[Path | str]:
         """Get list of files from SAFE structure.
