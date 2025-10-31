@@ -183,7 +183,7 @@ class Sentinel2Source(DataSource):
             all_files = [f for f in item.local_path.rglob("*") if f.is_file()]
             # Exclude _granule.json metadata file
             all_files = [f for f in all_files if f.name != "_granule.json"]
-            return all_files
+            return cast(list[Path | str], all_files)
         else:
             raise ValueError(
                 f"Invalid data: SAFE structure not found in '{item.local_path}' "
