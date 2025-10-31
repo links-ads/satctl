@@ -165,7 +165,7 @@ class Sentinel1Source(DataSource):
         log.debug("Found %d items", len(items))
         return items
 
-    def get_by_id(self, item_id: str) -> Granule:
+    def get_by_id(self, item_id: str, **kwargs) -> Granule:
         """Get specific Sentinel-1 granule by ID.
 
         Args:
@@ -206,7 +206,7 @@ class Sentinel1Source(DataSource):
             all_files = [f for f in item.local_path.rglob("*") if f.is_file()]
             # Exclude internal metadata file used for tracking
             all_files = [f for f in all_files if f.name != "_granule.json"]
-            return all_files
+            return cast(list[Path | str], all_files)
         else:
             raise ValueError("SAFE structure not found - manifest.safe is missing")
 
@@ -417,17 +417,10 @@ class Sentinel1Source(DataSource):
             raise ValueError("Missing datasets or default composite for storage")
 
         # Parse dataset names and prepare output filenames
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
-        log.debug("Attempting to save the following datasets: %s", datasets_dict)
+        datasets_dict = self._prepare_datasets(writer, params)
 
-        # Skip existing files unless force=True (avoids redundant processing)
-        if not force:
-            for dataset_name, file_name in list(datasets_dict.items()):
-                if (destination / item.granule_id / f"{file_name}.{writer.extension}").exists():
-                    del datasets_dict[dataset_name]
-
-        files = self.get_files(item)
-        log.debug("Found %d files to process", len(files))
+        # Filter existing files using base class helper
+        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
         # Load scene with requested SAR datasets
         log.debug("Loading and resampling scene")

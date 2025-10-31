@@ -520,7 +520,11 @@ class DataSource(ABC):
         Returns:
             dict[str, str]: Dictionary mapping dataset names to file names
         """
-        datasets_dict = writer.parse_datasets(params.datasets or self.default_composite)
+        datasets = params.datasets if params.datasets is not None else self.default_composite
+        if datasets is None:
+            raise ValueError("No datasets specified and no default composite configured")
+
+        datasets_dict = writer.parse_datasets(datasets)
         log.debug("Attempting to save the following datasets: %s", datasets_dict)
         return datasets_dict
 

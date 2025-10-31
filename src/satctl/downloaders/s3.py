@@ -43,7 +43,7 @@ class S3Downloader(Downloader):
         self.region_name = region_name
         self.s3_client = None
 
-    def init(self) -> None:
+    def init(self, **kwargs) -> None:
         """Initialize S3 client with authentication.
 
         Raises:
@@ -57,9 +57,7 @@ class S3Downloader(Downloader):
         session = self.auth.auth_session if hasattr(self.auth, "auth_session") else None
 
         # Determine endpoint URL (prefer authenticator's endpoint if available)
-        endpoint_url = self.endpoint_url
-        if hasattr(self.auth, "endpoint_url") and self.auth.endpoint_url:
-            endpoint_url = self.auth.endpoint_url
+        endpoint_url = getattr(self.auth, "endpoint_url", self.endpoint_url)
 
         if session:
             # If authenticator provides a session (e.g., boto3 session), use it

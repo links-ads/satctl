@@ -44,7 +44,7 @@ class Writer(ABC):
         dataset: DataArray,
         output_path: Path,
         **kwargs,
-    ) -> None:
+    ) -> Path | None:
         """Write dataset to file in the specific format.
 
         Args:
