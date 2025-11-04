@@ -154,8 +154,8 @@ def test_search_params():
     from satctl.model import SearchParams
 
     # Use absolute path relative to project root
-    project_root = Path(__file__).parent.parent
-    geojson_path = project_root / "data" / "EMSR760.json"
+    project_root = Path(__file__).parent
+    geojson_path = project_root / "assets" / "area.json"
 
     return SearchParams.from_file(
         path=geojson_path,
