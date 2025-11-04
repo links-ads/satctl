@@ -13,8 +13,7 @@ NUM_THREADS?=8
 
 .PHONY: install  ## Install the package, dependencies, and pre-commit for local development
 install: .uv
-	uv sync --frozen --group all --all-extras
-	uv pip install pre-commit
+	uv sync --frozen --all-extras
 	uv run pre-commit install --install-hooks
 
 .PHONY: format  ## Auto-format python source files
