@@ -49,6 +49,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Create env file
-        run: echo "${{ secrets.environment }}" > .env
+        run: |
+          touch .env
+          echo "${{ secrets.ENVIRONMENT }}" >> .env
       - name: Test
         run: make test
