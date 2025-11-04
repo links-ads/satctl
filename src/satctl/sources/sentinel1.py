@@ -534,7 +534,7 @@ class Sentinel1GRDSource(Sentinel1Source):
 
         groups = match.groups()
         satellite = groups[0]  # S1A, S1B, or S1C
-        acquisition_mode = groups[1]  # EW (Extra Wide), IW (Interferometric Wide), etc.
+        # acquisition_mode = groups[1]  # EW (Extra Wide), IW (Interferometric Wide), etc.
         level = groups[2]  # GRDH (High res), GRDM (Medium res)
         sensing_time = groups[3]  # Start of acquisition
 

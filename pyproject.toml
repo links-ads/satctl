@@ -52,7 +52,11 @@ classifiers = [
 [project.optional-dependencies]
 console = ["rich>=14.1.0", "typer>=0.19.2"]
 dev = ["mkdocs-material>=9.6.22", "pyright>=1.1.406", "ruff>=0.13.2"]
-test = ["pytest>=8.4.2", "pytest-cov>=7.0.0"]
+test = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "pytest-xdist>=3.8.0",
+]
 
 [project.scripts]
 satctl = "satctl.cli:app"
@@ -65,6 +69,11 @@ build-backend = "hatchling.build"
 line-length = 119
 
 [tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+log_format = "%(asctime)s %(levelname)s %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+log_disable = ["satpy", "pyresample"]
 markers = [
     "integration: marks tests as integration tests (require real APIs and credentials)",
     "requires_credentials: requires real API credentials from environment",
