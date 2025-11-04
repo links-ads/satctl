@@ -170,14 +170,32 @@ class Sentinel1Source(DataSource):
 
         Args:
             item_id: Granule identifier
+            **kwargs: Additional keyword arguments (unused)
 
         Returns:
             Granule: Requested granule with metadata
 
         Raises:
-            NotImplementedError: Method not yet implemented
+            ValueError: If granule not found
         """
-        raise NotImplementedError()
+        log.debug("Fetching Sentinel-1 granule by ID: %s", item_id)
+        catalogue = Client.open(self.stac_url)
+
+        try:
+            collection = catalogue.get_collection(self.collections[0])
+            stac_item = collection.get_item(item_id)
+            if stac_item is None:
+                raise ValueError(f"No granule found with id: {item_id}")
+        except Exception as e:
+            log.error("Failed to fetch granule %s: %s", item_id, e)
+            raise ValueError(f"No granule found with id: {item_id}") from e
+
+        return Granule(
+            granule_id=stac_item.id,
+            source=self.collections[0],
+            assets={k: S1Asset(href=v.href, media_type=v.media_type) for k, v in stac_item.assets.items()},
+            info=self._parse_item_name(stac_item.id),
+        )
 
     def get_files(self, item: Granule) -> list[Path | str]:
         """Get list of all files in a downloaded Sentinel-1 SAFE directory.
