@@ -19,6 +19,20 @@ if mp.get_start_method(allow_none=True) != "spawn":
 load_dotenv()
 
 
+def pytest_addoption(parser):
+    parser.addoption("--slow", action="store", default=False, help="Run slow tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--slow"):
+        # --slow given in cli: do not skip slow tests
+        return
+    skip_slow = pytest.mark.skip(reason="Marked as slow, skipping")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)
+
+
 @pytest.fixture(scope="session")
 def earthdata_credentials():
     """Provide EarthData credentials from environment."""
@@ -140,8 +154,8 @@ def test_search_params():
     from satctl.model import SearchParams
 
     # Use absolute path relative to project root
-    project_root = Path(__file__).parent.parent
-    geojson_path = project_root / "data" / "EMSR760.json"
+    project_root = Path(__file__).parent
+    geojson_path = project_root / "assets" / "area.json"
 
     return SearchParams.from_file(
         path=geojson_path,
@@ -163,9 +177,8 @@ def test_conversion_params():
     from satctl.model import ConversionParams
 
     # Use absolute path relative to project root
-    project_root = Path(__file__).parent.parent
-    geojson_path = project_root / "data" / "EMSR760.json"
-
+    test_root = Path(__file__).parent
+    geojson_path = test_root / "assets" / "area.json"
     return ConversionParams.from_file(
         path=geojson_path,
         target_crs="EPSG:4326",

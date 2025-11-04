@@ -1,7 +1,7 @@
 # Simple and elegant Makefile derived from the almighty https://github.com/pydantic/pydantic
 .DEFAULT_GOAL := help
 sources = src tests
-NUM_THREADS?=1
+NUM_THREADS?=8
 
 .PHONY: .uv  ## Check that uv is installed
 .uv:
@@ -33,10 +33,10 @@ typecheck: .pre-commit
 
 .PHONY: test  ## Run all tests
 test: .uv
-	uv run coverage run -m pytest -s --durations=10
+	uv run coverage run -m pytest --durations=10
 
 .PHONY: all  ## Run the standard set of checks performed in CI
-all: lint typecheck codespell testcov
+all: lint typecheck test
 
 .PHONY: clean  ## Clear local caches and build artifacts
 clean:
