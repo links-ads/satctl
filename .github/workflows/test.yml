@@ -51,6 +51,6 @@ jobs:
       - name: Create env file
         run: |
           touch .env
-          printf %q "${{ secrets.ENVIRONMENT }}" >> .env
+          echo '::escapeData::${{ secrets.ENVIRONMENT }}' >> .env
       - name: Test
         run: make test
