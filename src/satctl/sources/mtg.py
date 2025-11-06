@@ -1,11 +1,13 @@
 import logging
 import re
+import threading
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
 import dask.config
+import numpy as np
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
 from satpy.scene import Scene
@@ -29,6 +31,8 @@ class MTGAsset(BaseModel):
 
 class MTGSource(DataSource):
     """Source for EUMETSAT MTG product"""
+
+    _netcdf_lock = threading.Lock()
 
     def __init__(
         self,
@@ -130,7 +134,7 @@ class MTGSource(DataSource):
             )
 
         log.debug("Found %d items", len(items))
-        return items
+        return items[: self.search_limit]
 
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
         """Get specific MTG granule by ID.
@@ -298,13 +302,61 @@ class MTGSource(DataSource):
         # Filter existing files using base class helper
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
-        # Load and resample scene
-        log.debug("Loading and resampling scene")
-        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+        with self._netcdf_lock:
+            # Load and resample scene
+            log.debug("Loading and resampling scene")
+            scene = self.load_scene(item, datasets=list(datasets_dict.values()))
 
-        # Define area using base class helper
-        area_def = self._create_area_from_params(params, scene)
-        scene = self.resample(scene, area_def=area_def)
+            # Define area using base class helper
+            area_def = self._create_area_from_params(params, scene)
+            scene = scene.compute()
+            scene = self.resample(scene, area_def=area_def)
 
-        # Write datasets using base class helper
-        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+            # Write datasets using base class helper
+            res = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+
+        return res
+
+    def _write_scene_datasets(
+        self,
+        scene: Scene,
+        datasets_dict: dict[str, str],
+        destination: Path,
+        granule_id: str,
+        writer: Writer,
+        dtype: type | np.dtype[Any] | None = None,
+    ) -> dict[str, list]:
+        """Write all datasets from scene to output files.
+
+        Args:
+            scene (Scene): Scene containing loaded datasets
+            datasets_dict (dict[str, str]): Dictionary mapping dataset names to file names
+            destination (Path): Base destination directory
+            granule_id (str): Granule identifier for subdirectory
+            writer (Writer): Writer instance for output
+
+        Returns:
+            dict[str, list]: Dictionary mapping granule_id to list of output paths
+        """
+        from collections import defaultdict
+
+        from xarray import DataArray
+
+        paths: dict[str, list] = defaultdict(list)
+        output_dir = destination / granule_id
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        for dataset_name, file_name in datasets_dict.items():
+            if "mask" in dataset_name:
+                dtype = np.uint8
+            else:
+                dtype = np.float32
+            output_path = output_dir / f"{file_name}.{writer.extension}"
+            paths[granule_id].append(
+                writer.write(
+                    dataset=cast(DataArray, scene[dataset_name]),
+                    output_path=output_path,
+                    dtype=dtype,
+                )
+            )
+        return paths

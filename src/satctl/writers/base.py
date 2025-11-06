@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
+import numpy as np
 from xarray import DataArray
 
 
@@ -43,7 +44,8 @@ class Writer(ABC):
         self,
         dataset: DataArray,
         output_path: Path,
-        **kwargs,
+        dtype: type | np.dtype[Any] | None = None,
+        **kwargs: Any,
     ) -> Path | None:
         """Write dataset to file in the specific format.
 
