@@ -133,7 +133,7 @@ class MTGSource(DataSource):
             )
 
         log.debug("Found %d items", len(items))
-        return items
+        return items[: self.search_limit]
 
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
         """Get specific MTG granule by ID.
