@@ -58,7 +58,6 @@ dev = [
     "ruff>=0.13.2",
 ]
 test = ["pytest>=8.4.2", "pytest-cov>=7.0.0", "pytest-xdist>=3.8.0"]
-
 all = ["satctl[console, dev, test]"]
 
 [project.scripts]

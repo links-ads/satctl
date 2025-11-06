@@ -24,3 +24,16 @@ Example:
     >>> granules = source.search(params)
     >>> source.download(granules, destination="data/downloads")
 """
+
+import os
+from importlib.resources import files
+
+# override the satpy config path, adding our own custom yaml configs
+# it is non-destructive, i.e. if the variable is already set, we append
+satpy_config_path = os.getenv("SATPY_CONFIG_PATH", None)
+local_config_path = str(files("satctl") / "_config_data" / "satpy")
+if satpy_config_path is None:
+    satpy_config_path = local_config_path
+else:
+    satpy_config_path = str([satpy_config_path, local_config_path])
+os.environ["SATPY_CONFIG_PATH"] = satpy_config_path

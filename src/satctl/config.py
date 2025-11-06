@@ -42,11 +42,11 @@ class EnvYamlConfigSettingsSource(YamlConfigSettingsSource):
 
 class SatCtlSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        yaml_file="config.yml",
         env_file=".env",
         extra="ignore",
     )
 
+    yaml_file: str | Path | None = None
     download: dict[str, Any]
     auth: dict[str, Any]
     sources: dict[str, Any]
@@ -72,11 +72,12 @@ class SatCtlSettings(BaseSettings):
         Returns:
             tuple[PydanticBaseSettingsSource, ...]: Ordered tuple of settings sources
         """
+        yaml_file = init_settings.init_kwargs.get("yaml_file", "config.yml")  # type: ignore
         return (
             init_settings,
             env_settings,
             dotenv_settings,
-            EnvYamlConfigSettingsSource(settings_cls),
+            EnvYamlConfigSettingsSource(settings_cls, yaml_file=yaml_file),
             file_secret_settings,
         )
 
@@ -84,10 +85,11 @@ class SatCtlSettings(BaseSettings):
 _instance: SatCtlSettings | None = None
 
 
-def get_settings(**kwargs: Any) -> SatCtlSettings:
+def get_settings(yaml_file: str | Path = "config.yml", **kwargs: Any) -> SatCtlSettings:
     """Get or create the global settings instance.
 
     Args:
+        yaml_file (str, Path): path to the main configuration file, defaults to config.yml.
         **kwargs: Optional keyword arguments passed to SatCtlSettings constructor
 
     Returns:
@@ -95,5 +97,5 @@ def get_settings(**kwargs: Any) -> SatCtlSettings:
     """
     global _instance
     if _instance is None:
-        _instance = SatCtlSettings(**kwargs)
+        _instance = SatCtlSettings(yaml_file=yaml_file, **kwargs)
     return _instance

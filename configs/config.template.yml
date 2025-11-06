@@ -89,7 +89,7 @@ sources:
     search_limit: 100
     download_pool_conns: 1
     download_pool_size: 1
-    
+
 writer:
   geotiff:
     compress: lzw
