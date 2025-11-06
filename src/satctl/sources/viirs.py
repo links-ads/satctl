@@ -218,6 +218,14 @@ class VIIRSSource(EarthDataSource):
         parsed = self._parse_granule_id(radiance_id)
         return f"{parsed.instrument}03{parsed.product_type}.{parsed.date}.{parsed.time}.{parsed.version}.*"
 
+    def _get_file_extension(self) -> str:
+        """Get file extension for VIIRS data.
+
+        Returns:
+            str: File extension "nc" (VIIRS uses NetCDF format)
+        """
+        return "nc"
+
 
 class VIIRSL1BSource(VIIRSSource):
     """Source for VIIRS Level 1B products.
