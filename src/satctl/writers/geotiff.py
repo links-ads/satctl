@@ -22,7 +22,6 @@ class GeoTIFFWriter(Writer):
         self,
         compress: str = "lzw",
         tiled: bool = True,
-        dtype: Any | None = None,
         fill_value: Any = None,
     ):
         """Initialize GeoTIFF writer.
@@ -36,7 +35,6 @@ class GeoTIFFWriter(Writer):
         super().__init__(extension="tif")
         self.compress = compress
         self.tiled = tiled
-        self.dtype = dtype
         self.fill_value = fill_value
 
     def _get_transform_gcps(self, data_arr: DataArray) -> tuple[CRS | None, Affine | None, Any]:
@@ -121,6 +119,7 @@ class GeoTIFFWriter(Writer):
         self,
         dataset: DataArray,
         output_path: Path,
+        dtype: type | np.dtype[Any] | None = None,
         **tags: Any,
     ) -> Path:
         """Write DataArray to GeoTIFF file.
@@ -160,10 +159,8 @@ class GeoTIFFWriter(Writer):
         height, width = dataset.shape[-2:]
 
         # determine dtype and fill_value
-        dtype = self.dtype or dataset.dtype
-        if dtype == np.dtype("bool"):
-            dtype = np.uint8  # GeoTIFF does not support boolean type
-            data = data.astype(dtype)
+        dtype = dtype or dataset.dtype
+        data = data.astype(dtype)
         fill_value = self.fill_value
         if fill_value is None and np.issubdtype(dtype, np.floating):
             fill_value = np.nan
