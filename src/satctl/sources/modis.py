@@ -243,6 +243,14 @@ class MODISSource(EarthDataSource):
         platform = parsed.instrument  # MOD or MYD
         return f"{platform}03.{parsed.date}.{parsed.time}.{parsed.version}.*"
 
+    def _get_file_extension(self) -> str:
+        """Get file extension for MODIS data.
+
+        Returns:
+            str: File extension "hdf" (MODIS uses HDF format)
+        """
+        return "hdf"
+
 
 class MODISL1BSource(MODISSource):
     """Source for MODIS Level 1B products.
