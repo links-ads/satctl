@@ -161,6 +161,9 @@ class GeoTIFFWriter(Writer):
 
         # determine dtype and fill_value
         dtype = self.dtype or dataset.dtype
+        if dtype == np.dtype("bool"):
+            dtype = np.uint8  # GeoTIFF does not support boolean type
+            data = data.astype(dtype)
         fill_value = self.fill_value
         if fill_value is None and np.issubdtype(dtype, np.floating):
             fill_value = np.nan
