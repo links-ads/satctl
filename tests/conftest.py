@@ -165,6 +165,29 @@ def test_search_params():
 
 
 @pytest.fixture
+def test_mtg_search_params():
+    """Provide SearchParams for integration tests.
+
+    Uses the EMSR760 GeoJSON file located in the data/ directory at the project root.
+    Configured with a date range that has known satellite coverage for the test area.
+
+    Returns:
+        SearchParams: Search parameters configured for testing
+    """
+    from satctl.model import SearchParams
+
+    # Use absolute path relative to project root
+    project_root = Path(__file__).parent
+    geojson_path = project_root / "assets" / "area.json"
+
+    return SearchParams.from_file(
+        path=geojson_path,
+        start=datetime.strptime("2024-09-25", "%Y-%m-%d"),
+        end=datetime.strptime("2024-09-26", "%Y-%m-%d"),
+    )
+
+
+@pytest.fixture
 def test_conversion_params():
     """Provide ConversionParams for integration tests.
 
