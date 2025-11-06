@@ -321,6 +321,9 @@ class EarthDataSource(DataSource):
         """
         try:
             # Fetch radiance data (level 02)
+            if not item_id.endswith(".nc"):
+                item_id = f"{item_id}.nc"
+
             radiance_results = earthaccess.search_data(
                 short_name=short_name,
                 granule_name=item_id,
