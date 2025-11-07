@@ -445,22 +445,13 @@ class Sentinel1Source(DataSource):
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
 
         # Define target area for resampling
-        if params.area_geometry is not None:
-            # User provided AOI - use it with specified CRS and resolution
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            # No AOI provided - use entire granule extent
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
+        area_def = self.define_area(
+            target_crs=params.target_crs_obj,
+            area=params.area_geometry,
+            scene=scene,
+            source_crs=params.source_crs_obj,
+            resolution=params.resolution,
+        )
 
         # Resample to target area
         scene = self.resample(scene, area_def=area_def)
