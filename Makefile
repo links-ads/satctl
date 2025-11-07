@@ -65,6 +65,26 @@ docs:
 docs-serve: ## Build and serve the documentation, for local preview
 	uv run mkdocs serve --strict
 
+.PHONY: release  ## Bump version, create git tag and commit (BUMP=major|minor|patch)
+release: .uv
+ifndef BUMP
+	$(error BUMP is not set. Usage: make release BUMP=major|minor|patch)
+endif
+	@echo "Current version: $$(uv version)"
+	@echo "Bumping $(BUMP) version..."
+	@uv version --bump $(BUMP)
+	$(eval NEW_VERSION := $(shell uv version))
+	@echo "New version: v$(NEW_VERSION)"
+	@echo "Creating git commit and tag..."
+	@git add pyproject.toml
+	@git commit -m "Bump version to $(NEW_VERSION)"
+	@git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
+	@git push
+	@git push origin tag v$(NEW_VERSION)
+	@echo ""
+	@echo "✓ Version bumped to $(NEW_VERSION)"
+	@echo "  You can now run 'uv publish' if necessary"
+
 .PHONY: help  ## Display this message
 help:
 	@grep -E \
