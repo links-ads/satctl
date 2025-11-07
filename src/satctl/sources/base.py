@@ -6,6 +6,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
 from pyproj import CRS, Transformer
 from pyresample import create_area_def
 from pyresample.geometry import AreaDefinition, SwathDefinition
@@ -620,6 +621,7 @@ class DataSource(ABC):
         destination: Path,
         granule_id: str,
         writer: Writer,
+        dtype: type | np.dtype[Any] | None = None,
     ) -> dict[str, list]:
         """Write all datasets from scene to output files.
 
@@ -647,6 +649,7 @@ class DataSource(ABC):
                 writer.write(
                     dataset=cast(DataArray, scene[dataset_name]),
                     output_path=output_path,
+                    dtype=dtype,
                 )
             )
         return paths

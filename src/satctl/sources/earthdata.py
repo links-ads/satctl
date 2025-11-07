@@ -230,6 +230,19 @@ class EarthDataSource(DataSource):
         """
         ...
 
+    @abstractmethod
+    def _get_file_extension(self) -> str:
+        """Get the file extension for this data source.
+
+        Different sensors use different file formats:
+        - MODIS: HDF format (.hdf)
+        - VIIRS: NetCDF format (.nc)
+
+        Returns:
+            str: File extension without dot (e.g., "hdf", "nc")
+        """
+        ...
+
     def _get_short_name_from_granule(self, granule_id: str) -> str:
         """Extract the short_name from a granule ID.
 
@@ -329,6 +342,10 @@ class EarthDataSource(DataSource):
         """
         try:
             # Fetch radiance data (level 02)
+            extension = self._get_file_extension()
+            if not item_id.endswith(f".{extension}"):
+                item_id = f"{item_id}.{extension}"
+
             radiance_results = earthaccess.search_data(
                 short_name=short_name,
                 granule_name=item_id,
