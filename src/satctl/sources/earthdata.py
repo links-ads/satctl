@@ -9,10 +9,8 @@ from typing import Any
 import earthaccess
 from pydantic import BaseModel
 
-from satctl.auth import Authenticator
-from satctl.auth.earthdata import EarthDataAuthenticator
-from satctl.downloaders import Downloader
-from satctl.downloaders.http import HTTPDownloader
+from satctl.auth import AuthBuilder
+from satctl.downloaders import DownloadBuilder, Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.writers import Writer
@@ -89,9 +87,12 @@ class EarthDataSource(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,
         short_name: str,
         version: str | None = None,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str | None = "earthdata",
+        default_downloader: str | None = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -99,9 +100,13 @@ class EarthDataSource(DataSource):
         """Initialize EarthData source.
 
         Args:
-            collection_name (str): Collection name identifier
-            reader (str): Satpy reader name
-            authenticator (Authenticator): Authenticator instance for credential management            short_name (str): NASA short name for the product
+            collection_name (str): Collection name identifier.
+            reader (str): Satpy reader name.
+            short_name (str): NASA short name for this source.
+            auth_builder (AuthBuilder): factory that creates an auth object on demand.
+            down_builder (DownloadBuilder): factory that create a downloader object on demand.
+            default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
+            default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
             version (str | None): Product version. Defaults to None.
             default_composite (str | None): Default composite name. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
@@ -109,9 +114,12 @@ class EarthDataSource(DataSource):
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,
+            auth_builder=auth_builder,
+            down_builder=down_builder,
             default_composite=default_composite,
             default_resolution=default_resolution,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
         )
         self.reader = reader
         self.short_name = short_name
@@ -255,7 +263,7 @@ class EarthDataSource(DataSource):
             list[Granule]: List of granules for this combination
         """
         # Ensure authentication before searching (earthaccess requires global auth)
-        self._ensure_authenticated()
+        self.authenticator().ensure_authenticated()
 
         search_kwargs: dict[str, Any] = {
             "short_name": short_name,
@@ -360,20 +368,6 @@ class EarthDataSource(DataSource):
             },
             info=self._parse_item_name(radiance_id),
         )
-
-    def get_downloader_init_kwargs(self, downloader: Downloader) -> dict[str, Any]:
-        """Provide EarthData session to downloader initialization.
-
-        Args:
-            downloader (Downloader): The downloader instance being initialized
-
-        Returns:
-            dict[str, Any]: Dictionary with session keyword argument if applicable
-        """
-        # Only provide session if we have HTTPDownloader with EarthDataAuthenticator
-        if isinstance(downloader, HTTPDownloader) and isinstance(downloader.auth, EarthDataAuthenticator):
-            return {"session": downloader.auth.auth_session}
-        return {}
 
     def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download both radiance and georeference files for a granule.

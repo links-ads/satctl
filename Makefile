@@ -32,7 +32,7 @@ typecheck: .pre-commit
 
 .PHONY: test  ## Run all tests
 test: .uv
-	uv run coverage run -m pytest --durations=10
+	uv run coverage run -m pytest --durations=10 --log-disable=satpy --log-disable=pyresample
 
 .PHONY: all  ## Run the standard set of checks performed in CI
 all: lint typecheck test

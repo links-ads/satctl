@@ -9,7 +9,6 @@ log = logging.getLogger(__name__)
 
 @pytest.mark.integration
 @pytest.mark.requires_credentials
-@pytest.mark.slow
 class TestMODISL1BIntegration(IntegrationTestBase):
     """Integration tests for MODIS L1B source.
 
@@ -20,10 +19,7 @@ class TestMODISL1BIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(
-        self,
-        earthdata_authenticator,
-    ) -> None:
+    def test_auth_and_init(self, earthdata_credentials) -> None:
         """Test MODIS source initialization and authentication.
 
         This test:
@@ -36,11 +32,14 @@ class TestMODISL1BIntegration(IntegrationTestBase):
             earthdata_authenticator: Fixture providing EarthData authenticator
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.modis import MODISL1BSource
 
             # Create MODIS source with Terra satellite and 1km resolution
             source = MODISL1BSource(
-                authenticator=earthdata_authenticator,
+                auth_builder=configure_authenticator("earthdata", **earthdata_credentials),
+                down_builder=configure_downloader("http"),
                 platform=["mod"],  # Terra satellite
                 resolution=["1km"],  # 1km resolution
                 search_limit=1,  # Limit results for testing
@@ -114,14 +113,9 @@ class TestMODISL1BIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import HTTPDownloader
-
-            downloader = HTTPDownloader(authenticator=earthdata_authenticator)
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
-
+            success, failure = self.source.download(self.granules, temp_download_dir)
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
-
             # Store for subsequent tests on the class
             type(self).downloaded_item.extend(success)
 

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -47,9 +48,10 @@ class SatCtlSettings(BaseSettings):
     )
 
     yaml_file: str | Path | None = None
-    download: dict[str, Any]
-    auth: dict[str, Any]
-    sources: dict[str, Any]
+    # default to empty values
+    download: dict[str, Any] = {}
+    auth: dict[str, Any] = {}
+    sources: dict[str, Any] = {}
 
     @classmethod
     def settings_customise_sources(
@@ -85,7 +87,7 @@ class SatCtlSettings(BaseSettings):
 _instance: SatCtlSettings | None = None
 
 
-def get_settings(yaml_file: str | Path = "config.yml", **kwargs: Any) -> SatCtlSettings:
+def get_settings(**kwargs: Any) -> SatCtlSettings:
     """Get or create the global settings instance.
 
     Args:
@@ -97,5 +99,6 @@ def get_settings(yaml_file: str | Path = "config.yml", **kwargs: Any) -> SatCtlS
     """
     global _instance
     if _instance is None:
+        yaml_file = Path(os.getenv("SATCTL_CONFIG", "config.yml"))
         _instance = SatCtlSettings(yaml_file=yaml_file, **kwargs)
     return _instance

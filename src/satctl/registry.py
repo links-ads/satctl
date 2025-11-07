@@ -14,7 +14,7 @@ Example:
     >>> source = source_registry.create("sentinel2", downloader=my_downloader)
 """
 
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -87,3 +87,19 @@ class Registry(Generic[T]):
             bool: True if name is registered, False otherwise
         """
         return name in self._items
+
+
+class Builder(Generic[T]):
+    """
+    Builder/factory class definition.
+    Provides the means to defer the creation of a named object when we need one.
+    """
+
+    def __init__(self, name: str, registry: Registry, **config: dict) -> None:
+        self.name = name
+        self.registry = registry
+        self.config = config
+
+    def __call__(self, **overrides: Any) -> T:
+        merged_config = {**self.config, **overrides}
+        return self.registry.create(self.name, **merged_config)

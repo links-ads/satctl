@@ -7,8 +7,8 @@ from typing import Literal, TypedDict
 
 import xarray as xr
 
-
-from satctl.auth import Authenticator
+from satctl.auth import AuthBuilder
+from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
     DAY_NIGHT_CONDITIONS,
@@ -51,9 +51,12 @@ class VIIRSSource(EarthDataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,
         short_name: str,
         version: str | None = None,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str = "earthdata",
+        default_downloader: str = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -63,8 +66,12 @@ class VIIRSSource(EarthDataSource):
         Args:
             collection_name (str): Name of the VIIRS collection
             reader (str): Satpy reader name for this product type
-            authenticator (Authenticator): Authenticator instance for credential management            short_name (str): NASA CMR short name for the dataset
+            short_name (str): NASA CMR short name for the dataset
             version (str | None): Dataset version. Defaults to None.
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
+            default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
@@ -72,9 +79,12 @@ class VIIRSSource(EarthDataSource):
         super().__init__(
             collection_name,
             reader=reader,
-            authenticator=authenticator,
             short_name=short_name,
             version=version,
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
             search_limit=search_limit,
@@ -248,7 +258,10 @@ class VIIRSL1BSource(VIIRSSource):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str = "earthdata",
+        default_downloader: str = "http",
         satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -256,7 +269,11 @@ class VIIRSL1BSource(VIIRSSource):
         """Initialize VIIRS Level 1B data source.
 
         Args:
-            authenticator (Authenticator): Authenticator instance for credential management            satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
+            default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
+            satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
             product_type (list[Literal["mod", "img"]]): List of product types to search
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
@@ -276,16 +293,17 @@ class VIIRSL1BSource(VIIRSSource):
                     resolution=prod_cfg["resolution"],
                 )
             )
-
         # Use the first combination as the primary configuration for parent class
         primary = self.combinations[0]
-
         super().__init__(
             "viirs-l1b",
             reader="viirs_l1b",
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite="automatic",
             default_resolution=primary["resolution"],
-            authenticator=authenticator,
             short_name=primary["short_name"],
             version=primary["version"],
             search_limit=search_limit,

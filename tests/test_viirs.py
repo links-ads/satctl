@@ -19,10 +19,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(
-        self,
-        earthdata_authenticator,
-    ) -> None:
+    def test_auth_and_init(self, earthdata_credentials) -> None:
         """Test VIIRS source initialization and authentication.
 
         This test:
@@ -36,11 +33,14 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             earthdata_authenticator: Fixture providing EarthData authenticator
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.viirs import VIIRSL1BSource
 
             # Create VIIRS source with NPP satellite and M-band product (750m resolution)
             source = VIIRSL1BSource(
-                authenticator=earthdata_authenticator,
+                auth_builder=configure_authenticator("earthdata", **earthdata_credentials),
+                down_builder=configure_downloader("http"),
                 satellite=["vnp"],  # NPP satellite
                 product_type=["mod"],  # M-bands (750m)
                 search_limit=1,  # Limit results for testing
@@ -114,14 +114,9 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import HTTPDownloader
-
-            downloader = HTTPDownloader(authenticator=earthdata_authenticator)
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
-
+            success, failure = self.source.download(self.granules, temp_download_dir)
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
-
             # Store for subsequent tests on the class
             type(self).downloaded_item.extend(success)
 

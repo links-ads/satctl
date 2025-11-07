@@ -10,8 +10,8 @@ from eumdac.datastore import DataStore
 from pydantic import BaseModel
 from satpy.scene import Scene
 
-from satctl.auth import Authenticator
-from satctl.downloaders import Downloader
+from satctl.auth import AuthBuilder
+from satctl.downloaders import DownloadBuilder, Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
@@ -35,34 +35,38 @@ class MTGSource(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str = "eumetsat",
+        default_downloader: str = "s3",
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize MTG data source.
 
         Args:
             collection_name (str): Name of the MTG collection
             reader (str): Satpy reader name for this product type
-            authenticator (Authenticator): Authenticator instance for credential management            default_composite (str | None): Default composite/band to load. Defaults to None.
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "eumetsat".
+            default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "s3".
+            default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
-            download_pool_conns (int): Number of download pool connections. Defaults to 10.
-            download_pool_size (int): Size of download pool. Defaults to 2.
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader
         self.search_limit = search_limit
-        self.download_pool_conns = download_pool_conns
-        self.download_pool_size = download_pool_size
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -103,9 +107,9 @@ class MTGSource(DataSource):
             list[Granule]: List of matching granules with metadata and assets
         """
         # Ensure authentication before searching
-        self._ensure_authenticated()
         log.debug("Setting up the DataStore client")
-        catalogue = DataStore(self.authenticator.auth_session)
+        self.authenticator().ensure_authenticated()
+        catalogue = DataStore(self.authenticator().auth_session)
 
         log.debug("Searching catalog")
         collections = [catalogue.get_collection(c) for c in self.collections]
@@ -128,7 +132,6 @@ class MTGSource(DataSource):
                     for eumdac_result in results
                 ]
             )
-
         log.debug("Found %d items", len(items))
         return items
 
@@ -146,9 +149,9 @@ class MTGSource(DataSource):
             ValueError: If granule not found
         """
         # Ensure authentication before accessing DataStore
-        self._ensure_authenticated()
         log.debug("Fetching MTG granule by ID: %s", item_id)
-        catalogue = DataStore(self.authenticator.auth_session)
+        self.authenticator().ensure_authenticated()
+        catalogue = DataStore(self.authenticator().auth_session)
 
         try:
             product = catalogue.get_product(self.collections[0], item_id)
@@ -289,22 +292,11 @@ class MTGSource(DataSource):
         """
         # Use synchronous dask scheduler for processing
         dask.config.set(scheduler="synchronous")
-        # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
-
-        # Parse datasets using base class helper
         datasets_dict = self._prepare_datasets(writer, params)
-
-        # Filter existing files using base class helper
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
-
-        # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-
-        # Define area using base class helper
         area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
-
-        # Write datasets using base class helper
         return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)

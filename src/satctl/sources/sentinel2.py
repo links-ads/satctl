@@ -1,6 +1,5 @@
 import logging
 import re
-import warnings
 from abc import abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,8 +9,8 @@ from pydantic import BaseModel
 from pystac_client import Client
 from satpy.scene import Scene
 
-from satctl.auth import Authenticator
-from satctl.downloaders import Downloader
+from satctl.auth import AuthBuilder
+from satctl.downloaders import DownloadBuilder, Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.writers import Writer
@@ -61,39 +60,41 @@ class Sentinel2Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,
         stac_url: str,
+        auth_builder: AuthBuilder | None,
+        down_builder: DownloadBuilder | None,
+        default_authenticator: str | None,
+        default_downloader: str | None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize Sentinel-2 source.
 
         Args:
             collection_name (str): Collection name identifier
             reader (str): Satpy reader name
-            authenticator (Authenticator): Authenticator instance for credential management
             stac_url (str): STAC catalog URL
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None.
+            default_downloader (str | None): Default downloader name to use when down_builder is None.
             default_composite (str | None): Default composite name. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum search results. Defaults to 100.
-            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
-            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_downloader=default_downloader,
+            default_authenticator=default_authenticator,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader
         self.stac_url = stac_url
         self.search_limit = search_limit
-        self.download_pool_conns = download_pool_conns
-        self.download_pool_size = download_pool_size
-        warnings.filterwarnings(action="ignore", category=UserWarning)
 
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -375,21 +376,16 @@ class Sentinel2Source(DataSource):
         """
         # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
-
         # Parse datasets using base class helper
         datasets_dict = self._prepare_datasets(writer, params)
-
         # Filter existing files using base class helper
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
-
         # Load and resample scene
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-
         # Define area using base class helper
         area_def = self._create_area_from_params(params, scene)
         scene = self.resample(scene, area_def=area_def)
-
         # Write datasets using base class helper
         return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
 
@@ -425,35 +421,38 @@ class Sentinel2L2ASource(Sentinel2Source):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,
         stac_url: str,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str | None = "s3",
+        default_downloader: str | None = "s3",
         default_composite: str = "true_color",
         default_resolution: int = 10,
         search_limit: int = 100,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize Sentinel-2 L2A source.
 
         Args:
-            authenticator (Authenticator): Authenticator instance for credential management
             stac_url (str): STAC catalog URL
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None. Defaults to "s3".
+            default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "s3".
             default_composite (str): Default composite name. Defaults to 'true_color'.
             default_resolution (int): Default resolution in meters. Defaults to 10.
             search_limit (int): Maximum search results. Defaults to 100.
-            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
-            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
         """
         super().__init__(
             "sentinel-2-l2a",
             reader="msi_safe_l2a",
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_downloader=default_downloader,
+            default_authenticator=default_authenticator,
             default_composite=default_composite,
             default_resolution=default_resolution,
-            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
-            download_pool_conns=download_pool_conns,
-            download_pool_size=download_pool_size,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -515,35 +514,38 @@ class Sentinel2L1CSource(Sentinel2Source):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,
         stac_url: str,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str | None = "s3",
+        default_downloader: str | None = "s3",
         default_composite: str = "true_color",
         default_resolution: int = 10,
         search_limit: int = 100,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize Sentinel-2 L1C source.
 
         Args:
-            authenticator (Authenticator): Authenticator instance for credential management
             stac_url (str): STAC catalog URL
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None. Defaults to "s3".
+            default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "s3".
             default_composite (str): Default composite name. Defaults to 'true_color'.
             default_resolution (int): Default resolution in meters. Defaults to 10.
             search_limit (int): Maximum search results. Defaults to 100.
-            download_pool_conns (int): HTTP connection pool size. Defaults to 10.
-            download_pool_size (int): HTTP connection pool max size. Defaults to 2.
         """
         super().__init__(
             "sentinel-2-l1c",
             reader="msi_safe",
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
-            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
-            download_pool_conns=download_pool_conns,
-            download_pool_size=download_pool_size,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:

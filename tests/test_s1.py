@@ -23,10 +23,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
     for the sar-c_safe reader to work correctly.
     """
 
-    def test_auth_and_init(
-        self,
-        s3_authenticator,
-    ) -> None:
+    def test_auth_and_init(self, odata_credentials, copernicus_config) -> None:
         """Test Sentinel-1 GRD source initialization and authentication.
 
         This test:
@@ -40,12 +37,15 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             copernicus_config: Fixture providing Copernicus configuration
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.sentinel1 import Sentinel1GRDSource
 
             # Create Sentinel-1 GRD source
             # Default composite should be a SAR composite (e.g., dual-pol VV+VH)
             source = Sentinel1GRDSource(
-                authenticator=s3_authenticator,
+                auth_builder=configure_authenticator("s3", **odata_credentials, **copernicus_config),
+                down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 composite="s1_dual_pol",  # Or whatever your default SAR composite is
                 search_limit=1,  # Limit results for testing
@@ -103,7 +103,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(self, temp_download_dir, s3_authenticator, copernicus_config) -> None:
+    def test_download(self, temp_download_dir, odata_credentials, copernicus_config) -> None:
         """Test downloading a Sentinel-1 GRD granule.
 
         This test:
@@ -122,14 +122,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import S3Downloader
-
-            # Create downloader with S3 auth
-            downloader = S3Downloader(
-                authenticator=s3_authenticator,
-                endpoint_url=copernicus_config["endpoint_url"],
-            )
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
+            success, failure = self.source.download(self.granules, temp_download_dir)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
