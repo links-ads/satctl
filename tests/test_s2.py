@@ -264,12 +264,7 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(
-        self,
-        temp_download_dir,
-        s3_authenticator,
-        copernicus_config,
-    ) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading a Sentinel-2 L1C granule.
 
         This test:

@@ -90,11 +90,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(
-        self,
-        temp_download_dir,
-        earthdata_authenticator,
-    ) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading a VIIRS granule.
 
         This test:

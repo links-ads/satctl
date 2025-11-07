@@ -90,11 +90,7 @@ class TestOLCIIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(
-        self,
-        temp_download_dir,
-        odata_authenticator,
-    ) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading an OLCI granule.
 
         This test:

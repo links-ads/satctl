@@ -25,7 +25,7 @@ class TestMTGIntegration(IntegrationTestBase):
 
     def test_auth_and_init(
         self,
-        eumetsat_authenticator,
+        eumetsat_credentials,
     ) -> None:
         """Test MTG source initialization and authentication.
 
@@ -38,11 +38,15 @@ class TestMTGIntegration(IntegrationTestBase):
             eumetsat_authenticator: Fixture providing EUMETSAT authenticator
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.mtg import MTGSource
 
             # Create MTG source
             # Default composite should be a visible/IR composite (e.g., natural_color, airmass)
             source = MTGSource(
+                auth_builder=configure_authenticator("eumetsat", **eumetsat_credentials),
+                down_builder=configure_downloader("http"),
                 collection_name="EO:EUM:DAT:0662",  # Or appropriate MTG collection
                 reader="fci_l1c_nc",  # FCI Level 1C NetCDF reader
                 default_composite="simple_fci_fire_mask",  # Or whatever your default composite is
@@ -107,7 +111,7 @@ class TestMTGIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(self, temp_download_dir, eumetsat_authenticator) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading an MTG granule.
 
         This test:
@@ -119,7 +123,6 @@ class TestMTGIntegration(IntegrationTestBase):
 
         Args:
             temp_download_dir: Fixture providing temporary download directory
-            eumetsat_authenticator: Fixture providing EUMETSAT authenticator
         """
         self.check_prerequisites("auth", "search")
 
