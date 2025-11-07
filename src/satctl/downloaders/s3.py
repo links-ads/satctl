@@ -21,7 +21,6 @@ class S3Downloader(Downloader):
 
     def __init__(
         self,
-        authenticator: Authenticator,
         max_retries: int = DEFAULT_MAX_RETRIES,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         endpoint_url: str | None = None,
@@ -36,31 +35,29 @@ class S3Downloader(Downloader):
             endpoint_url (str | None): Optional custom S3 endpoint URL. Defaults to None.
             region_name (str | None): AWS region name. Defaults to None.
         """
-        super().__init__(authenticator)
+        super().__init__()
         self.max_retries = max_retries
         self.chunk_size = chunk_size
         self.endpoint_url = endpoint_url
         self.region_name = region_name
         self.s3_client = None
+        self.auth = None
 
-    def init(self, **kwargs) -> None:
+    def init(self, authenticator: Authenticator, **kwargs) -> None:
         """Initialize S3 client with authentication.
 
         Raises:
             RuntimeError: If authentication fails
         """
-        # Ensure authentication is valid
-        if not self.auth.ensure_authenticated():
+        # ensure authentication is valid
+        if not authenticator.ensure_authenticated():
             raise RuntimeError("Failed to initialize S3 downloader: authentication failed")
+        session = authenticator.auth_session if authenticator else None
+        # determine endpoint URL (prefer authenticator's endpoint if available)
+        endpoint_url = getattr(authenticator, "endpoint_url", self.endpoint_url)
 
-        # Get session from authenticator if available
-        session = self.auth.auth_session if hasattr(self.auth, "auth_session") else None
-
-        # Determine endpoint URL (prefer authenticator's endpoint if available)
-        endpoint_url = getattr(self.auth, "endpoint_url", self.endpoint_url)
-
+        # if authenticator provides a session (e.g., boto3 session), use it
         if session:
-            # If authenticator provides a session (e.g., boto3 session), use it
             try:
                 kwargs = {}
                 if endpoint_url:
@@ -73,8 +70,8 @@ class S3Downloader(Downloader):
                 log.warning("Failed to create S3 client from session: %s", e)
                 self.s3_client = None
 
+        # fallback: create client directly with optional endpoint
         if not self.s3_client:
-            # Fallback: create client directly with optional endpoint
             kwargs = {}
             if endpoint_url:
                 kwargs["endpoint_url"] = endpoint_url
@@ -83,6 +80,8 @@ class S3Downloader(Downloader):
 
             self.s3_client = boto3.client("s3", **kwargs)
             log.debug("Initialized S3 client with endpoint: %s", endpoint_url or "default")
+        # last, set the auth object for futher checks down the line
+        self.auth = authenticator
 
     def _parse_s3_uri(self, uri: str) -> tuple[str, str]:
         """Parse S3 URI into bucket and key.
@@ -126,7 +125,7 @@ class S3Downloader(Downloader):
         Returns:
             bool: True if download succeeded, False otherwise
         """
-        if not self.s3_client:
+        if not self.s3_client or not self.auth:
             log.error("S3 client not initialized. Call init() first.")
             return False
 

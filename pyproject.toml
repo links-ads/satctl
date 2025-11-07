@@ -58,7 +58,6 @@ dev = [
     "ruff>=0.13.2",
 ]
 test = ["pytest>=8.4.2", "pytest-cov>=7.0.0", "pytest-xdist>=3.8.0"]
-
 all = ["satctl[console, dev, test]"]
 
 [project.scripts]
@@ -76,7 +75,6 @@ log_cli = true
 log_cli_level = "INFO"
 log_format = "%(asctime)s %(levelname)s %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
-log_disable = ["satpy", "pyresample"]
 markers = [
     "integration: marks tests as integration tests (require real APIs and credentials)",
     "requires_credentials: requires real API credentials from environment",

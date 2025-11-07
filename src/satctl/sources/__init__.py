@@ -14,7 +14,6 @@ system and can be created using the create_source() factory function.
 
 from typing import Any
 
-from satctl.auth import registry as auth_registry
 from satctl.config import get_settings
 from satctl.registry import Registry
 from satctl.sources.base import DataSource
@@ -37,37 +36,42 @@ registry.register("modis-l1b", MODISL1BSource)
 registry.register("s1grd", Sentinel1GRDSource)
 
 
-def create_source(
-    source_name: str,
-    authenticator: str | None = None,
-    **kwargs: dict[str, Any],
-) -> DataSource:
-    """Create a data source from the given parameters.
-    When left empty, parameters are inferred from the configuration, if present.
+def create_source(source_name: str, **overrides: dict[str, Any]) -> DataSource:
+    """Create a data source with optional factory overrides.
 
     Args:
-        source_name (str): Name of the data source, strictly required.
-        authenticator (str | None, optional): Authenticator class name. Inferred from config when it defaults to None.
-        kwargs (dict[str, Any], optional): Any other keyword argument to be passed to the source.
+        source_name: Name of the data source
+        **overrides: Additional parameters to override source config
 
     Returns:
-        DataSource: instance of the given data source.
+        DataSource instance
+
+    Examples:
+        # factories from config
+        >>> source = create_source("s2l2a")
+
+        # custom auth factory
+        >>> source = create_source(
+        ...     "s2-l2a",
+        ...     auth_builder=lambda: ODataAuthenticator(username="test")
+        ... )
+
+        # both custom factories
+        >>> source = create_source(
+        ...     "s2-l2a",
+        ...     auth_builder=configure_authenticator("odata", ...)
+        ...     down_builder=configure_downloader("s3", ...)
+        ... )
     """
+    if not registry.is_registered(source_name):
+        raise ValueError(f"Unknown source: {source_name}")
+    # get global settings, if any, update with user-defined overrides
     config = get_settings()
     source_params = config.sources.get(source_name, {}).copy()
-    source_params.update(kwargs)
-
-    # Remove downloader from source_params as it's no longer passed to source __init__
-    source_params.pop("downloader", None)
-
-    auth_instance = None
-    if auth_name := source_params.pop("authenticator", authenticator):
-        auth_config = config.auth.get(auth_name, {})
-        auth_instance = auth_registry.create(auth_name, **auth_config)
-
+    source_params = {**source_params, **overrides}
+    # let the base source init handle builders and such
     return registry.create(
         source_name,
-        authenticator=auth_instance,
         **source_params,
     )
 

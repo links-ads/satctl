@@ -81,59 +81,6 @@ def copernicus_config():
 
 
 @pytest.fixture
-def earthdata_authenticator(earthdata_credentials):
-    """Create an EarthDataAuthenticator instance."""
-    from satctl.auth import EarthDataAuthenticator
-
-    return EarthDataAuthenticator(
-        strategy="environment",
-        username=earthdata_credentials["username"],
-        password=earthdata_credentials["password"],
-        mode="requests_https",
-    )
-
-
-@pytest.fixture
-def odata_authenticator(odata_credentials, copernicus_config):
-    """Create an ODataAuthenticator instance."""
-    from satctl.auth import ODataAuthenticator
-
-    return ODataAuthenticator(
-        token_url=copernicus_config["token_url"],
-        client_id=copernicus_config["client_id"],
-        username=odata_credentials["username"],
-        password=odata_credentials["password"],
-    )
-
-
-@pytest.fixture
-def s3_authenticator(odata_credentials, copernicus_config):
-    """Create an S3Authenticator instance."""
-    from satctl.auth import S3Authenticator
-
-    return S3Authenticator(
-        token_url=copernicus_config["token_url"],
-        client_id=copernicus_config["client_id"],
-        username=odata_credentials["username"],
-        password=odata_credentials["password"],
-        endpoint_url=copernicus_config["endpoint_url"],
-        s3_credentials_url=copernicus_config["s3_credentials_url"],
-        use_temp_credentials=False,
-    )
-
-
-@pytest.fixture
-def eumetsat_authenticator(eumetsat_credentials):
-    """Create an EUMETSATAuthenticator instance."""
-    from satctl.auth import EUMETSATAuthenticator
-
-    return EUMETSATAuthenticator(
-        consumer_key=eumetsat_credentials["consumer_key"],
-        consumer_secret=eumetsat_credentials["consumer_secret"],
-    )
-
-
-@pytest.fixture
 def temp_download_dir(tmp_path):
     """Provide a temporary directory for downloads."""
     download_dir = tmp_path / "downloads"

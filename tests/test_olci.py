@@ -21,7 +21,7 @@ class TestOLCIIntegration(IntegrationTestBase):
 
     def test_auth_and_init(
         self,
-        odata_authenticator,
+        odata_credentials,
     ) -> None:
         """Test OLCI source initialization and authentication.
 
@@ -35,11 +35,14 @@ class TestOLCIIntegration(IntegrationTestBase):
             odata_authenticator: Fixture providing Copernicus OData authenticator
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.sentinel3 import OLCISource
 
             # Create OLCI source
             source = OLCISource(
-                authenticator=odata_authenticator,
+                auth_builder=configure_authenticator("odata", **odata_credentials),
+                down_builder=configure_downloader("http"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -87,11 +90,7 @@ class TestOLCIIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(
-        self,
-        temp_download_dir,
-        odata_authenticator,
-    ) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading an OLCI granule.
 
         This test:
@@ -111,14 +110,9 @@ class TestOLCIIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import HTTPDownloader
-
-            downloader = HTTPDownloader(authenticator=odata_authenticator)
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
-
+            success, failure = self.source.download(self.granules, temp_download_dir)
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
-
             # Store for subsequent tests on the class
             type(self).downloaded_item.extend(success)
 

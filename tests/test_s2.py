@@ -21,7 +21,7 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
 
     def test_auth_and_init(
         self,
-        s3_authenticator,
+        odata_credentials,
         copernicus_config,
     ) -> None:
         """Test Sentinel-2 L2A source initialization and authentication.
@@ -37,11 +37,14 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
             copernicus_config: Fixture providing Copernicus configuration
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.sentinel2 import Sentinel2L2ASource
 
             # Create Sentinel-2 L2A source
             source = Sentinel2L2ASource(
-                authenticator=s3_authenticator,
+                auth_builder=configure_authenticator("s3", **odata_credentials, **copernicus_config),
+                down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -115,14 +118,9 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import S3Downloader
-
-            downloader = S3Downloader(authenticator=s3_authenticator, endpoint_url=copernicus_config["endpoint_url"])
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
-
+            success, failure = self.source.download(self.granules, temp_download_dir)
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
-
             # Store for subsequent tests on the class
             type(self).downloaded_item.extend(success)
 
@@ -195,7 +193,7 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
 
     def test_auth_and_init(
         self,
-        s3_authenticator,
+        odata_credentials,
         copernicus_config,
     ) -> None:
         """Test Sentinel-2 L1C source initialization and authentication.
@@ -211,11 +209,14 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
             copernicus_config: Fixture providing Copernicus configuration
         """
         try:
+            from satctl.auth import configure_authenticator
+            from satctl.downloaders import configure_downloader
             from satctl.sources.sentinel2 import Sentinel2L1CSource
 
             # Create Sentinel-2 L1C source
             source = Sentinel2L1CSource(
-                authenticator=s3_authenticator,
+                auth_builder=configure_authenticator("s3", **odata_credentials, **copernicus_config),
+                down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
             )
@@ -263,12 +264,7 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(
-        self,
-        temp_download_dir,
-        s3_authenticator,
-        copernicus_config,
-    ) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading a Sentinel-2 L1C granule.
 
         This test:
@@ -289,14 +285,9 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import S3Downloader
-
-            downloader = S3Downloader(authenticator=s3_authenticator, endpoint_url=copernicus_config["endpoint_url"])
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
-
+            success, failure = self.source.download(self.granules, temp_download_dir)
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
-
             # Store for subsequent tests on the class
             type(self).downloaded_item.extend(success)
 

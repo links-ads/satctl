@@ -13,8 +13,9 @@ from pyresample.geometry import AreaDefinition, SwathDefinition
 from satpy.scene import Scene
 from shapely import Polygon
 
-from satctl.auth import Authenticator
-from satctl.downloaders import Downloader
+from satctl.auth import AuthBuilder
+from satctl.auth.base import Authenticator
+from satctl.downloaders import DownloadBuilder, Downloader
 from satctl.model import ConversionParams, Granule, ProgressEventType, SearchParams
 from satctl.progress.events import emit_event
 from satctl.writers import Writer
@@ -28,7 +29,10 @@ class DataSource(ABC):
     def __init__(
         self,
         name: str,
-        authenticator: Authenticator,
+        auth_builder: AuthBuilder | None,
+        down_builder: DownloadBuilder | None,
+        default_authenticator: str | None = None,
+        default_downloader: str | None = None,
         default_resolution: int | None = None,
         default_composite: str | None = None,
     ):
@@ -36,15 +40,38 @@ class DataSource(ABC):
 
         Args:
             name (str): Source name identifier
-            authenticator (Authenticator): Authenticator instance for credential management
+            auth_builder (AuthBuilder): Factory that creates an authenticator object on demand.
+            down_builder (DownloadBuilder): Factory that creates a downloader object on demand.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             default_composite (str | None): Default composite/dataset to load. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None. Defaults to None.
+            default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to None.
+
         """
         self.source_name = name
-        self.authenticator = authenticator
         self.default_composite = default_composite
         self.default_resolution = default_resolution
         self.reader = None
+
+        if auth_builder is None:
+            from satctl.auth import configure_authenticator
+
+            if default_authenticator is None:
+                raise ValueError(f"Authentication not configured for source: {name}")
+            auth_builder = configure_authenticator(default_authenticator)
+
+        if down_builder is None:
+            from satctl.downloaders import configure_downloader
+
+            if default_downloader is None:
+                raise ValueError(f"Downloader not configured for source: {name}")
+            down_builder = configure_downloader(default_downloader)
+
+        self.auth_builder = auth_builder
+        self.down_builder = down_builder
+        # lazy init to avoid attribute errors
+        self._authenticator: Authenticator | None = None
+        self._downloader: Downloader | None = None
 
     @property
     def collections(self) -> list[str]:
@@ -146,34 +173,20 @@ class DataSource(ABC):
         """
         ...
 
-    def _ensure_authenticated(self) -> bool:
-        """Ensure authenticator has valid credentials.
+    def authenticator(self, **overrides: dict) -> Authenticator:
+        if not self._authenticator:
+            self._authenticator = self.auth_builder(**overrides)
+        return cast(Authenticator, self._authenticator)
 
-        Returns:
-            bool: True if authenticated, False otherwise
-        """
-        if hasattr(self.authenticator, "ensure_authenticated"):
-            return self.authenticator.ensure_authenticated()
-        return True
-
-    def get_downloader_init_kwargs(self, downloader: Downloader) -> dict[str, Any]:
-        """Hook method for subclasses to provide downloader initialization arguments.
-
-        Override this method in subclasses to pass custom arguments to downloader.init().
-
-        Args:
-            downloader (Downloader): The downloader instance being initialized
-
-        Returns:
-            dict[str, Any]: Keyword arguments to pass to downloader.init()
-        """
-        return {}
+    def downloader(self, **overrides: dict) -> Downloader:
+        if not self._downloader:
+            self._downloader = self.down_builder(**overrides)
+        return cast(Downloader, self._downloader)
 
     def download(
         self,
         items: Granule | list[Granule],
         destination: Path,
-        downloader: Downloader,
         num_workers: int | None = None,
     ) -> tuple[list, list]:
         """Download one or more granules with parallel processing.
@@ -181,7 +194,6 @@ class DataSource(ABC):
         Args:
             items (Granule | list[Granule]): Single granule or list of granules to download
             destination (Path): Base destination directory
-            downloader (Downloader): Downloader instance to use for downloading
             num_workers (int | None): Number of parallel workers. Defaults to 1.
 
         Returns:
@@ -204,12 +216,19 @@ class DataSource(ABC):
             description=self.collections[0],
         )
         # Initialize downloader
-        downloader.init(**self.get_downloader_init_kwargs(downloader))
+        downloader = self.downloader()
+        downloader.init(self.authenticator())
         executor = None
         try:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 future_to_item_map = {
-                    executor.submit(self.download_item, item, destination, downloader): item for item in items
+                    executor.submit(
+                        self.download_item,
+                        item,
+                        destination,
+                        downloader,
+                    ): item
+                    for item in items
                 }
                 for future in as_completed(future_to_item_map):
                     item = future_to_item_map[future]

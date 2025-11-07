@@ -1,6 +1,5 @@
 import logging
 import re
-import warnings
 from abc import abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,9 +8,8 @@ from typing import cast
 from pydantic import BaseModel
 from pystac_client import Client
 
-
-from satctl.auth import Authenticator
-from satctl.downloaders import Downloader
+from satctl.auth import AuthBuilder
+from satctl.downloaders import DownloadBuilder, Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
@@ -36,38 +34,41 @@ class Sentinel3Source(DataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,
         stac_url: str,
+        auth_builder: AuthBuilder | None,
+        down_builder: DownloadBuilder | None,
+        default_authenticator: str | None,
+        default_downloader: str | None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize Sentinel-3 data source.
 
         Args:
             collection_name (str): Name of the Sentinel-3 collection
             reader (str): Satpy reader name for this product type
-            authenticator (Authenticator): Authenticator instance for credential management            stac_url (str): STAC catalog URL for searching
+            stac_url (str): URL of the STAC catalog API endpoint
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None.
+            default_downloader (str | None): Default downloader name to use when down_builder is None.
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
-            download_pool_conns (int): Number of download pool connections. Defaults to 10.
-            download_pool_size (int): Size of download pool. Defaults to 2.
         """
         super().__init__(
             collection_name,
-            authenticator=authenticator,
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
         )
         self.reader = reader
         self.stac_url = stac_url
         self.search_limit = search_limit
-        self.download_pool_conns = download_pool_conns
-        self.download_pool_size = download_pool_size
-        warnings.filterwarnings(action="ignore", category=UserWarning)
 
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -264,34 +265,38 @@ class SLSTRSource(Sentinel3Source):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,
         stac_url: str,
+        auth_builder: AuthBuilder | None,
+        down_builder: DownloadBuilder | None,
+        default_authenticator: str | None = "odata",
+        default_downloader: str | None = "http",
         default_composite: str = "all_bands",
         default_resolution: int = 1000,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize Sentinel-3 SLSTR data source.
 
         Args:
-            authenticator (Authenticator): Authenticator instance for credential management            stac_url (str): STAC catalog URL for searching
+            stac_url (str): STAC catalog URL for searching
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None. Defaults to "odata".
+            default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str): Default composite/band to load. Defaults to "all_bands".
             default_resolution (int): Default resolution in meters. Defaults to 1000.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
-            download_pool_conns (int): Number of download pool connections. Defaults to 10.
-            download_pool_size (int): Size of download pool. Defaults to 2.
         """
         super().__init__(
             "sentinel-3-sl-1-rbt-ntc",
             reader="slstr_l1b",
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
-            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
-            download_pool_conns=download_pool_conns,
-            download_pool_size=download_pool_size,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -329,34 +334,38 @@ class OLCISource(Sentinel3Source):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,
         stac_url: str,
+        auth_builder: AuthBuilder | None,
+        down_builder: DownloadBuilder | None,
+        default_authenticator: str | None = "odata",
+        default_downloader: str | None = "http",
         default_composite: str = "all_bands",
         default_resolution: int = 300,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
-        download_pool_conns: int = 10,
-        download_pool_size: int = 2,
     ):
         """Initialize Sentinel-3 OLCI data source.
 
         Args:
-            authenticator (Authenticator): Authenticator instance for credential management            stac_url (str): STAC catalog URL for searching
+            stac_url (str): STAC catalog URL for searching
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str | None): Default authenticator name to use when auth_builder is None. Defaults to "odata".
+            default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str): Default composite/band to load. Defaults to "all_bands".
             default_resolution (int): Default resolution in meters. Defaults to 300.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
-            download_pool_conns (int): Number of download pool connections. Defaults to 10.
-            download_pool_size (int): Size of download pool. Defaults to 2.
         """
         super().__init__(
             "sentinel-3-olci-1-efr-ntc",
             reader="olci_l1b",
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
-            authenticator=authenticator,
             stac_url=stac_url,
             search_limit=search_limit,
-            download_pool_conns=download_pool_conns,
-            download_pool_size=download_pool_size,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:

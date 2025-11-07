@@ -7,8 +7,8 @@ from typing import Literal, TypedDict
 
 from pyhdf.SD import SD, SDC
 
-
-from satctl.auth import Authenticator
+from satctl.auth import AuthBuilder
+from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
     DAY_NIGHT_CONDITIONS,
@@ -51,9 +51,12 @@ class MODISSource(EarthDataSource):
         collection_name: str,
         *,
         reader: str,
-        authenticator: Authenticator,
         short_name: str,
         version: str | None = None,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str = "earthdata",
+        default_downloader: str = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -63,8 +66,12 @@ class MODISSource(EarthDataSource):
         Args:
             collection_name (str): Name of the MODIS collection
             reader (str): Satpy reader name for this product type
-            authenticator (Authenticator): Authenticator instance for credential management            short_name (str): NASA CMR short name for the dataset
+            short_name (str): NASA CMR short name for the dataset
             version (str | None): Dataset version. Defaults to None.
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
+            default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
@@ -72,9 +79,12 @@ class MODISSource(EarthDataSource):
         super().__init__(
             collection_name,
             reader=reader,
-            authenticator=authenticator,
             short_name=short_name,
             version=version,
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
             search_limit=search_limit,
@@ -281,17 +291,24 @@ class MODISL1BSource(MODISSource):
     def __init__(
         self,
         *,
-        authenticator: Authenticator,
         platform: list[Literal["mod", "myd"]],
         resolution: list[Literal["qkm", "hkm", "1km"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
+        auth_builder: AuthBuilder | None = None,
+        down_builder: DownloadBuilder | None = None,
+        default_authenticator: str = "earthdata",
+        default_downloader: str = "http",
     ):
         """Initialize MODIS Level 1B data source.
 
         Args:
-            authenticator (Authenticator): Authenticator instance for credential management            platform (list[Literal["mod", "myd"]]): List of satellite platforms to search
+            platform (list[Literal["mod", "myd"]]): List of satellite platforms to search
             resolution (list[Literal["qkm", "hkm", "1km"]]): List of resolutions to search
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
+            auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
+            down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
+            default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
+            default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
         """
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []
@@ -299,7 +316,6 @@ class MODISL1BSource(MODISSource):
             plat_cfg = PLATFORM_CONFIG[plat]
             res_cfg = RESOLUTION_CONFIG[res]
             short_name = f"{plat_cfg['prefix']}02{res_cfg['suffix']}"
-
             self.combinations.append(
                 ProductCombination(
                     platform=plat,
@@ -309,17 +325,18 @@ class MODISL1BSource(MODISSource):
                     resolution_meters=res_cfg["meters"],
                 )
             )
-
         # Use the first combination as the primary configuration for parent class
         primary = self.combinations[0]
-
         super().__init__(
             "modis-l1b",
             reader="modis_l1b",
+            auth_builder=auth_builder,
+            down_builder=down_builder,
+            short_name=primary["short_name"],
             default_composite="automatic",
             default_resolution=primary["resolution_meters"],
-            authenticator=authenticator,
-            short_name=primary["short_name"],
+            default_authenticator=default_authenticator,
+            default_downloader=default_downloader,
             version=primary["version"],
             search_limit=search_limit,
         )

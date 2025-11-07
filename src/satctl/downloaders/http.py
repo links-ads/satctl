@@ -24,7 +24,6 @@ class HTTPDownloader(Downloader):
 
     def __init__(
         self,
-        authenticator: Authenticator,
         max_retries: int = DEFAULT_MAX_RETRIES,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
@@ -34,33 +33,35 @@ class HTTPDownloader(Downloader):
         """Initialize HTTP downloader.
 
         Args:
-            authenticator (Authenticator): Authenticator instance
             max_retries (int): Maximum download retry attempts. Defaults to 3.
             chunk_size (int): Download chunk size in bytes. Defaults to 8192.
             timeout (int): Request timeout in seconds. Defaults to 30.
             pool_connections (int): Connection pool size. Defaults to 10.
             pool_maxsize (int): Maximum pool size. Defaults to 2.
         """
-        super().__init__(authenticator)
         self.max_retries = max_retries
         self.chunk_size = chunk_size
         self.timeout = timeout
         self.pool_conns = pool_connections
         self.pool_size = pool_maxsize
+        self.auth = None
 
-    def init(self, session: requests.Session | None = None, **kwargs: requests.Session) -> None:
+    def init(self, authenticator: Authenticator, **kwargs: dict) -> None:
         """Initialize HTTP session.
 
         Args:
-            session (requests.Session | None): Optional pre-configured session. Defaults to None.
-            **kwargs (requests.Session): Additional keyword arguments (unused)
+            authenticator (Authenticator): auth object to retrieve the session from.
+            **kwargs (dict): Additional keyword arguments (unused)
         """
-        if not session:
+        self.auth = authenticator
+        if authenticator.auth_session is not None:
+            self.session = authenticator.auth_session
+        else:
             session = requests.Session()
             adapter = HTTPAdapter(pool_connections=self.pool_conns, pool_maxsize=self.pool_size)
             session.mount("https://", adapter)
             session.mount("http://", adapter)
-        self.session = session
+            self.session = session
 
     def download(
         self,
@@ -78,6 +79,8 @@ class HTTPDownloader(Downloader):
         Returns:
             bool: True if download succeeded, False otherwise
         """
+        if not self.auth:
+            raise ValueError("Authenticator not set, did you call `init` on this downloader?")
         error = ""
         task_id = f"download_{item_id}"
 

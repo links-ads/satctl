@@ -8,20 +8,12 @@ from satctl.auth import Authenticator
 class Downloader(ABC):
     """Abstract base class for downloaders."""
 
-    def __init__(self, authenticator: Authenticator) -> None:
-        """Initialize downloader.
-
-        Args:
-            authenticator (Authenticator): Authenticator instance for credential management
-        """
-        super().__init__()
-        self.auth = authenticator
-
     @abstractmethod
-    def init(self, **kwargs: Any) -> None:
-        """Initialize downloader with optional configuration.
+    def init(self, authenticator: Authenticator, **kwargs: Any) -> None:
+        """Initialize downloader with an authenticator, and optional configuration.
 
         Args:
+            authenticator (Authenticator): auth object required for access tokens or sessions
             **kwargs (Any): Additional keyword arguments for initialization
         """
         ...
