@@ -95,7 +95,7 @@ class MTGSource(DataSource):
         groups = match.groups()
         acquisition_time = datetime.strptime(groups[3], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
         return ProductInfo(
-            instrument="olci",
+            instrument="fci",
             level=groups[1],
             product_type=groups[2],
             acquisition_time=acquisition_time,

@@ -42,7 +42,7 @@ if __name__ == "__main__":
     names = list_sources(name="s2*")
 
     # or directly create any source
-    source = create_source("slstr")
+    source = create_source("s3-slstr")
 
     # Define a research area, from file or as a simple Polygon
     area_file = Path("my_aoi.geojson")
@@ -81,7 +81,8 @@ Contributing requires the following tools: `uv` for environment and project mana
 Formatting, linting and type checking is enforced at `pre-commit` and CI level.
 
 The easiest way to quickstart is the following:
-```
+
+```shell
 # prepare the environment, requires uv
 $ make install
 ```
