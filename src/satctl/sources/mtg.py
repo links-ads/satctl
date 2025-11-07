@@ -42,7 +42,7 @@ class MTGSource(DataSource):
         auth_builder: AuthBuilder | None = None,
         down_builder: DownloadBuilder | None = None,
         default_authenticator: str = "eumetsat",
-        default_downloader: str = "s3",
+        default_downloader: str = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
         search_limit: int = DEFAULT_SEARCH_LIMIT,

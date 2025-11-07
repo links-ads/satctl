@@ -45,7 +45,6 @@ class TestMTGIntegration(IntegrationTestBase):
             source = MTGSource(
                 collection_name="EO:EUM:DAT:0662",  # Or appropriate MTG collection
                 reader="fci_l1c_nc",  # FCI Level 1C NetCDF reader
-                authenticator=eumetsat_authenticator,
                 default_composite="simple_fci_fire_mask",  # Or whatever your default composite is
                 default_resolution=2000,  # 2km resolution for FCI
                 search_limit=1,  # Limit results for testing
@@ -128,12 +127,7 @@ class TestMTGIntegration(IntegrationTestBase):
             pytest.skip("Skipping download: no granules found")
 
         try:
-            from satctl.downloaders import HTTPDownloader
-
-            # Create downloader for EUMETSAT HTTP downloads
-            downloader = HTTPDownloader(authenticator=eumetsat_authenticator)
-
-            success, failure = self.source.download(self.granules, temp_download_dir, downloader=downloader)
+            success, failure = self.source.download(self.granules, temp_download_dir)
 
             # Verify download succeeded using helper
             self.verify_download_success(success, failure, min_success=1)
