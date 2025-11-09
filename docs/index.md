@@ -11,9 +11,11 @@ $ uv add satctl
 $ uv add satctl[console]
 ```
 
-### Usage
+## Usage
 
-`satctl` tries to be as modular as possible, giving the user the possibility to stop the process at any time in the pipeline, from searching to converting the raw data into a GeoTIFF.
+`satctl` tries to be as modular as possible, giving the user
+the possibility to stop the process at any time in the pipeline,
+from searching to converting the raw data into a GeoTIFF.
 
 Here's a simple example of usage.
 
@@ -30,7 +32,7 @@ if __name__ == "__main__":
     names = list_sources(name="s2*")
 
     # or directly create any source
-    source = create_source("slstr")
+    source = create_source("s3-slstr")
 )
     # Define a research area, from file or as a simple Polygon
     area_file = Path("my_aoi.geojson")
@@ -73,11 +75,13 @@ For more examples and use cases, see the documentation.
 
 ## Contributing
 
-Contributing requires the following tools: `uv` for environment and project management, `ruff` for linting and formatting, `pyright` for standard type checking.
+Contributing requires the following tools: `uv` for environment and project management,
+ `ruff` for linting and formatting, `pyright` for standard type checking.
 Formatting, linting and type checking is enforced at `pre-commit` and CI level.
 
 The easiest way to quickstart is the following:
-```
+
+```shell
 # prepare the environment, requires uv
 $ make install
 ```

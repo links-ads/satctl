@@ -32,31 +32,40 @@ auth:
     use_temp_credentials: false
 
 sources:
-  slstr:
+
+  s1-grd:
+    default_authenticator: "s3"
+    default_downloader: "s3"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+    download_pool_conns: 1
+    download_pool_size: 1
+
+  s2-l2a:
+    default_authenticator: "s3"
+    default_downloader: "s3"
+    default_composite: "true_color"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+
+  s2-l1c:
+    default_authenticator: "s3"
+    default_downloader: "s3"
+    default_composite: "true_color"
+    stac_url: "https://stac.dataspace.copernicus.eu/v1"
+    search_limit: 100
+
+  s3-slstr:
     default_authenticator: "odata"
     default_downloader: "http"
     default_composite: "all_bands_m"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
 
-  olci:
+  s3-olci:
     default_authenticator: "odata"
     default_downloader: "http"
     default_composite: "all_bands"
-    stac_url: "https://stac.dataspace.copernicus.eu/v1"
-    search_limit: 100
-
-  s2l2a:
-    default_authenticator: "s3"
-    default_downloader: "s3"
-    default_composite: "true_color"
-    stac_url: "https://stac.dataspace.copernicus.eu/v1"
-    search_limit: 100
-
-  s2l1c:
-    default_authenticator: "s3"
-    default_downloader: "s3"
-    default_composite: "true_color"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
 
@@ -74,7 +83,7 @@ sources:
     platform: ["mod"]
     resolution: ["qkm", "hkm", "1km"]
 
-  mtg:
+  mtg-fci-l1c:
     default_authenticator: "eumetsat"
     default_downloader: "http"
     search_limit: 2
@@ -82,13 +91,6 @@ sources:
     reader: "fci_l1c_nc"
     default_composite: "natural_color"
 
-  s1grd:
-    default_authenticator: "s3"
-    default_downloader: "s3"
-    stac_url: "https://stac.dataspace.copernicus.eu/v1"
-    search_limit: 100
-    download_pool_conns: 1
-    download_pool_size: 1
 
 writer:
   geotiff:

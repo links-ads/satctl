@@ -15,7 +15,7 @@ Example:
     >>> from satctl.model import SearchParams
     >>> from datetime import datetime
     >>>
-    >>> source = create_source("s2l2a")
+    >>> source = create_source("s2-l2a")
     >>> params = SearchParams(
     ...     area=my_polygon,
     ...     start=datetime(2023, 1, 1),

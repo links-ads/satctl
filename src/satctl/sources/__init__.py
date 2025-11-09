@@ -26,14 +26,14 @@ from satctl.sources.sentinel3 import OLCISource, SLSTRSource
 from satctl.sources.viirs import VIIRSL1BSource
 
 registry = Registry[DataSource](name="source")
-registry.register("slstr", SLSTRSource)
-registry.register("olci", OLCISource)
-registry.register("s2l2a", Sentinel2L2ASource)
-registry.register("s2l1c", Sentinel2L1CSource)
-registry.register("mtg", MTGSource)
+registry.register("s1-grd", Sentinel1GRDSource)
+registry.register("s2-l2a", Sentinel2L2ASource)
+registry.register("s2-l1c", Sentinel2L1CSource)
+registry.register("s3-slstr", SLSTRSource)
+registry.register("s3-olci", OLCISource)
 registry.register("viirs-l1b", VIIRSL1BSource)
 registry.register("modis-l1b", MODISL1BSource)
-registry.register("s1grd", Sentinel1GRDSource)
+registry.register("mtg-fci-l1c", MTGSource)
 
 
 def create_source(source_name: str, **overrides: dict[str, Any]) -> DataSource:
@@ -48,7 +48,7 @@ def create_source(source_name: str, **overrides: dict[str, Any]) -> DataSource:
 
     Examples:
         # factories from config
-        >>> source = create_source("s2l2a")
+        >>> source = create_source("s2-l2a")
 
         # custom auth factory
         >>> source = create_source(
