@@ -23,19 +23,13 @@ class TestMTGIntegration(IntegrationTestBase):
     and needs to be extracted for processing.
     """
 
-    def test_auth_and_init(
-        self,
-        eumetsat_credentials,
-    ) -> None:
+    def test_auth_and_init(self) -> None:
         """Test MTG source initialization and authentication.
 
         This test:
         1. Creates an MTGSource instance with EUMETSAT authentication
         2. Verifies the source is properly configured
         3. Stores the source instance for subsequent tests
-
-        Args:
-            eumetsat_authenticator: Fixture providing EUMETSAT authenticator
         """
         try:
             from satctl.auth import configure_authenticator
@@ -45,7 +39,7 @@ class TestMTGIntegration(IntegrationTestBase):
             # Create MTG source
             # Default composite should be a visible/IR composite (e.g., natural_color, airmass)
             source = MTGSource(
-                auth_builder=configure_authenticator("eumetsat", **eumetsat_credentials),
+                auth_builder=configure_authenticator("eumetsat"),
                 down_builder=configure_downloader("http"),
                 collection_name="EO:EUM:DAT:0662",  # Or appropriate MTG collection
                 reader="fci_l1c_nc",  # FCI Level 1C NetCDF reader

@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from satpy.scene import Scene
 
 from satctl.auth import AuthBuilder
+from satctl.auth.eumetsat import EUMETSATAuthenticator
 from satctl.downloaders import DownloadBuilder, Downloader
 from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
@@ -112,8 +113,7 @@ class MTGSource(DataSource):
         """
         # Ensure authentication before searching
         log.debug("Setting up the DataStore client")
-        self.authenticator().ensure_authenticated()
-        catalogue = DataStore(self.authenticator().auth_session)
+        catalogue = DataStore(cast(EUMETSATAuthenticator, self.authenticator).auth_token)
 
         log.debug("Searching catalog")
         collections = [catalogue.get_collection(c) for c in self.collections]
@@ -154,8 +154,7 @@ class MTGSource(DataSource):
         """
         # Ensure authentication before accessing DataStore
         log.debug("Fetching MTG granule by ID: %s", item_id)
-        self.authenticator().ensure_authenticated()
-        catalogue = DataStore(self.authenticator().auth_session)
+        catalogue = DataStore(cast(EUMETSATAuthenticator, self.authenticator).auth_token)
 
         try:
             product = catalogue.get_product(self.collections[0], item_id)

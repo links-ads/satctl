@@ -173,14 +173,28 @@ class DataSource(ABC):
         """
         ...
 
-    def authenticator(self, **overrides: dict) -> Authenticator:
+    @property
+    def authenticator(self) -> Authenticator:
+        """Returns the current authenticator, or returns a newly created instance
+        if missing.
+
+        Returns:
+            Authenticator: auth instance.
+        """
         if not self._authenticator:
-            self._authenticator = self.auth_builder(**overrides)
+            self._authenticator = self.auth_builder()
         return cast(Authenticator, self._authenticator)
 
-    def downloader(self, **overrides: dict) -> Downloader:
+    @property
+    def downloader(self) -> Downloader:
+        """Returns the current downloader, or returns a newly created instance
+        if missing.
+
+        Returns:
+            Downloader: downloader instance.
+        """
         if not self._downloader:
-            self._downloader = self.down_builder(**overrides)
+            self._downloader = self.down_builder()
         return cast(Downloader, self._downloader)
 
     def download(
@@ -216,8 +230,7 @@ class DataSource(ABC):
             description=self.collections[0],
         )
         # Initialize downloader
-        downloader = self.downloader()
-        downloader.init(self.authenticator())
+        self.downloader.init(self.authenticator)
         executor = None
         try:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
@@ -226,7 +239,7 @@ class DataSource(ABC):
                         self.download_item,
                         item,
                         destination,
-                        downloader,
+                        self.downloader,
                     ): item
                     for item in items
                 }
@@ -460,6 +473,7 @@ class DataSource(ABC):
         failure = []
         num_workers = num_workers or 1
         batch_id = str(uuid.uuid4())
+        self._downloader = None
 
         emit_event(
             ProgressEventType.BATCH_STARTED,

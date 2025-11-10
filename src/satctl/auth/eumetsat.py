@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from eumdac.token import AccessToken
 
@@ -26,11 +26,9 @@ class EUMETSATAuthenticator(Authenticator):
         """
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
-        self._authenticated = False
-        self.access_token: Optional[AccessToken] = None
         if not self.consumer_key or not self.consumer_secret:
             raise ValueError("Invalid configuration: consumer_key and consumer_secret are required")
-
+        self.access_token: Optional[AccessToken] = None
         # Attempt initial authentication immediately
         self.ensure_authenticated()
 
@@ -46,16 +44,13 @@ class EUMETSATAuthenticator(Authenticator):
 
             if not self.access_token:
                 log.error("No AccessToken object received from authentication")
-                self._authenticated = False
-                return self._authenticated
+                return False
 
-            self._authenticated = True
             log.info("Successfully authenticated with EUMETSAT")
-            return self._authenticated
+            return True
 
         except Exception as e:
             log.error("Authentication failed: %s", e)
-            self._authenticated = False
             self.access_token = None
             return False
 
@@ -77,20 +72,33 @@ class EUMETSATAuthenticator(Authenticator):
         return {"Authorization": f"Bearer {token_string}"}
 
     @property
-    def auth_session(self) -> Optional[AccessToken]:
+    def auth_token(self) -> AccessToken:
         """Return the authenticated eumdac AccessToken object.
 
         Required for creating the eumdac.DataStore client.
 
         Returns:
-            Optional[AccessToken]: The AccessToken object for EUMETSAT API access
+            AccessToken: The AccessToken object for EUMETSAT API access
 
         Raises:
             RuntimeError: If authentication fails
+            ValueError: If the access token remains None
         """
-        if not self.ensure_authenticated(refresh=True):
+        if not self.ensure_authenticated():
             raise RuntimeError("Authentication failed for EUMETSAT: AccessToken is not available")
+        if self.access_token is None:
+            raise ValueError("Could not generate a valid access token")
         return self.access_token
+
+    @property
+    def auth_session(self) -> Any:
+        """No-op for EUMETSAT, it returns None since auth is handled through an access token.
+        Returning `None` lets the downloader handle its own session.
+
+        Returns:
+            None
+        """
+        return None
 
     def ensure_authenticated(self, refresh: bool = False) -> bool:
         """Ensure we have a valid access token.
@@ -101,6 +109,6 @@ class EUMETSATAuthenticator(Authenticator):
         Returns:
             bool: True if authenticated, False otherwise
         """
-        if not self._authenticated or refresh:
+        if not self.access_token or refresh:
             return self.authenticate()
         return True

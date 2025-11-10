@@ -19,11 +19,7 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(
-        self,
-        odata_credentials,
-        copernicus_config,
-    ) -> None:
+    def test_auth_and_init(self) -> None:
         """Test Sentinel-2 L2A source initialization and authentication.
 
         This test:
@@ -31,10 +27,6 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
         2. Creates a Sentinel2L2ASource instance
         3. Verifies the source is properly configured
         4. Stores the source instance for subsequent tests
-
-        Args:
-            s3_authenticator: Fixture providing Copernicus S3 authenticator
-            copernicus_config: Fixture providing Copernicus configuration
         """
         try:
             from satctl.auth import configure_authenticator
@@ -43,7 +35,7 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
 
             # Create Sentinel-2 L2A source
             source = Sentinel2L2ASource(
-                auth_builder=configure_authenticator("s3", **odata_credentials, **copernicus_config),
+                auth_builder=configure_authenticator("s3"),
                 down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
@@ -92,12 +84,7 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(
-        self,
-        temp_download_dir,
-        s3_authenticator,
-        copernicus_config,
-    ) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading a Sentinel-2 L2A granule.
 
         This test:
@@ -191,11 +178,7 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(
-        self,
-        odata_credentials,
-        copernicus_config,
-    ) -> None:
+    def test_auth_and_init(self) -> None:
         """Test Sentinel-2 L1C source initialization and authentication.
 
         This test:
@@ -215,7 +198,7 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
 
             # Create Sentinel-2 L1C source
             source = Sentinel2L1CSource(
-                auth_builder=configure_authenticator("s3", **odata_credentials, **copernicus_config),
+                auth_builder=configure_authenticator("s3"),
                 down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing

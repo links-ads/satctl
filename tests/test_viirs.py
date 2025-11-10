@@ -19,7 +19,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(self, earthdata_credentials) -> None:
+    def test_auth_and_init(self) -> None:
         """Test VIIRS source initialization and authentication.
 
         This test:
@@ -28,9 +28,6 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
         3. Creates a VIIRSL1BSource instance
         4. Verifies the source is properly configured
         5. Stores the source instance for subsequent tests
-
-        Args:
-            earthdata_authenticator: Fixture providing EarthData authenticator
         """
         try:
             from satctl.auth import configure_authenticator
@@ -39,7 +36,7 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
 
             # Create VIIRS source with NPP satellite and M-band product (750m resolution)
             source = VIIRSL1BSource(
-                auth_builder=configure_authenticator("earthdata", **earthdata_credentials),
+                auth_builder=configure_authenticator("earthdata"),
                 down_builder=configure_downloader("http"),
                 satellite=["vnp"],  # NPP satellite
                 product_type=["mod"],  # M-bands (750m)

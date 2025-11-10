@@ -19,10 +19,7 @@ class TestSLSTRIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(
-        self,
-        odata_credentials,
-    ) -> None:
+    def test_auth_and_init(self) -> None:
         """Test SLSTR source initialization and authentication.
 
         This test:
@@ -41,7 +38,7 @@ class TestSLSTRIntegration(IntegrationTestBase):
 
             # Create SLSTR source
             source = SLSTRSource(
-                auth_builder=configure_authenticator("odata", **odata_credentials),
+                auth_builder=configure_authenticator("odata"),
                 down_builder=configure_downloader("http"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing

@@ -19,7 +19,7 @@ class TestMODISL1BIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(self, earthdata_credentials) -> None:
+    def test_auth_and_init(self) -> None:
         """Test MODIS source initialization and authentication.
 
         This test:
@@ -38,7 +38,7 @@ class TestMODISL1BIntegration(IntegrationTestBase):
 
             # Create MODIS source with Terra satellite and 1km resolution
             source = MODISL1BSource(
-                auth_builder=configure_authenticator("earthdata", **earthdata_credentials),
+                auth_builder=configure_authenticator("earthdata"),
                 down_builder=configure_downloader("http"),
                 platform=["mod"],  # Terra satellite
                 resolution=["1km"],  # 1km resolution
