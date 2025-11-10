@@ -578,42 +578,6 @@ class DataSource(ABC):
                 filtered[dataset_name] = file_name
         return filtered
 
-    def _create_area_from_params(
-        self,
-        params: ConversionParams,
-        scene: Scene | None = None,
-    ) -> AreaDefinition:
-        """Create area definition from conversion params, using scene extent if no geometry.
-
-        Args:
-            params (ConversionParams): Conversion parameters with CRS and optional geometry
-            scene (Scene | None): Optional scene for extracting extent when no geometry provided. Defaults to None.
-
-        Returns:
-            AreaDefinition: AreaDefinition for resampling
-
-        Raises:
-            ValueError: If scene is None when area_geometry is also None
-        """
-        if params.area_geometry is not None:
-            return self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-        else:
-            if scene is None:
-                raise ValueError(
-                    "Invalid configuration: scene parameter is required when area_geometry is not provided"
-                )
-            return self.define_area(
-                target_crs=params.target_crs_obj,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-
     def _write_scene_datasets(
         self,
         scene: Scene,

@@ -306,7 +306,13 @@ class MTGSource(DataSource):
             scene = self.load_scene(item, datasets=list(datasets_dict.values()))
 
             # Define area using base class helper
-            area_def = self._create_area_from_params(params, scene)
+            area_def = self.define_area(
+                target_crs=params.target_crs_obj,
+                area=params.area_geometry,
+                scene=scene,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
             scene = scene.compute()
             scene = self.resample(scene, area_def=area_def)
 

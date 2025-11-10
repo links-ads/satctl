@@ -384,7 +384,13 @@ class Sentinel2Source(DataSource):
         log.debug("Loading and resampling scene")
         scene = self.load_scene(item, datasets=list(datasets_dict.values()))
         # Define area using base class helper
-        area_def = self._create_area_from_params(params, scene)
+        area_def = self.define_area(
+            target_crs=params.target_crs_obj,
+            area=params.area_geometry,
+            scene=scene,
+            source_crs=params.source_crs_obj,
+            resolution=params.resolution,
+        )
         scene = self.resample(scene, area_def=area_def)
         # Write datasets using base class helper
         return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
