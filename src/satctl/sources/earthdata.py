@@ -276,8 +276,7 @@ class EarthDataSource(DataSource):
             list[Granule]: List of granules for this combination
         """
         # Ensure authentication before searching (earthaccess requires global auth)
-        self.authenticator().ensure_authenticated()
-
+        self.authenticator.ensure_authenticated()
         search_kwargs: dict[str, Any] = {
             "short_name": short_name,
             "temporal": (params.start.isoformat(), params.end.isoformat()),
