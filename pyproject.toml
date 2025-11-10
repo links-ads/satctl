@@ -1,6 +1,6 @@
 [project]
 name = "satctl"
-version = "0.3.0"
+version = "0.3.1"
 description = "Toolkit to search, download and process Earth Observation data"
 readme = "README.md"
 authors = [
