@@ -52,5 +52,8 @@ jobs:
         run: |
           touch .env
           echo '::escapeData::${{ secrets.ENVIRONMENT }}' >> .env
+      - name: Prepare configuration
+        run: |
+          ln -s $(pwd)/configs/config.template.yml config.yml
       - name: Test
         run: make test

@@ -23,7 +23,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
     for the sar-c_safe reader to work correctly.
     """
 
-    def test_auth_and_init(self, odata_credentials, copernicus_config) -> None:
+    def test_auth_and_init(self) -> None:
         """Test Sentinel-1 GRD source initialization and authentication.
 
         This test:
@@ -31,10 +31,6 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
         2. Creates a Sentinel1GRDSource instance
         3. Verifies the source is properly configured
         4. Stores the source instance for subsequent tests
-
-        Args:
-            s3_authenticator: Fixture providing Copernicus S3 authenticator
-            copernicus_config: Fixture providing Copernicus configuration
         """
         try:
             from satctl.auth import configure_authenticator
@@ -44,7 +40,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             # Create Sentinel-1 GRD source
             # Default composite should be a SAR composite (e.g., dual-pol VV+VH)
             source = Sentinel1GRDSource(
-                auth_builder=configure_authenticator("s3", **odata_credentials, **copernicus_config),
+                auth_builder=configure_authenticator("s3"),
                 down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 composite="s1_dual_pol",  # Or whatever your default SAR composite is
@@ -103,7 +99,7 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
             raise
 
     @pytest.mark.slow
-    def test_download(self, temp_download_dir, odata_credentials, copernicus_config) -> None:
+    def test_download(self, temp_download_dir) -> None:
         """Test downloading a Sentinel-1 GRD granule.
 
         This test:

@@ -2,7 +2,6 @@
 
 import logging
 import multiprocessing as mp
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -31,53 +30,6 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
-
-
-@pytest.fixture(scope="session")
-def earthdata_credentials():
-    """Provide EarthData credentials from environment."""
-    username = os.getenv("EARTHDATA_USERNAME")
-    password = os.getenv("EARTHDATA_PASSWORD")
-
-    if not username or not password:
-        pytest.skip("EARTHDATA_USERNAME and EARTHDATA_PASSWORD must be set in .env")
-
-    return {"username": username, "password": password}
-
-
-@pytest.fixture(scope="session")
-def odata_credentials():
-    """Provide Copernicus OData credentials from environment."""
-    username = os.getenv("ODATA_USERNAME")
-    password = os.getenv("ODATA_PASSWORD")
-
-    if not username or not password:
-        pytest.skip("ODATA_USERNAME and ODATA_PASSWORD must be set in .env")
-
-    return {"username": username, "password": password}
-
-
-@pytest.fixture(scope="session")
-def eumetsat_credentials():
-    """Provide EUMETSAT credentials from environment."""
-    consumer_key = os.getenv("EUMETSAT_CONSUMER_KEY")
-    consumer_secret = os.getenv("EUMETSAT_CONSUMER_SECRET")
-
-    if not consumer_key or not consumer_secret:
-        pytest.skip("EUMETSAT_CONSUMER_KEY and EUMETSAT_CONSUMER_SECRET must be set in .env")
-
-    return {"consumer_key": consumer_key, "consumer_secret": consumer_secret}
-
-
-@pytest.fixture(scope="session")
-def copernicus_config():
-    """Provide Copernicus OAuth configuration constants."""
-    return {
-        "token_url": "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
-        "client_id": "cdse-public",
-        "s3_credentials_url": "https://eodata.dataspace.copernicus.eu/s3-credentials",
-        "endpoint_url": "https://eodata.dataspace.copernicus.eu",
-    }
 
 
 @pytest.fixture

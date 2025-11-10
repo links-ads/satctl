@@ -19,10 +19,7 @@ class TestOLCIIntegration(IntegrationTestBase):
     - Convert to GeoTIFF using Satpy
     """
 
-    def test_auth_and_init(
-        self,
-        odata_credentials,
-    ) -> None:
+    def test_auth_and_init(self) -> None:
         """Test OLCI source initialization and authentication.
 
         This test:
@@ -30,9 +27,6 @@ class TestOLCIIntegration(IntegrationTestBase):
         2. Creates an OLCISource instance
         3. Verifies the source is properly configured
         4. Stores the source instance for subsequent tests
-
-        Args:
-            odata_authenticator: Fixture providing Copernicus OData authenticator
         """
         try:
             from satctl.auth import configure_authenticator
@@ -41,7 +35,7 @@ class TestOLCIIntegration(IntegrationTestBase):
 
             # Create OLCI source
             source = OLCISource(
-                auth_builder=configure_authenticator("odata", **odata_credentials),
+                auth_builder=configure_authenticator("odata"),
                 down_builder=configure_downloader("http"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 search_limit=1,  # Limit results for testing
