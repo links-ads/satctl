@@ -2,6 +2,7 @@
 .DEFAULT_GOAL := help
 sources = src tests
 NUM_THREADS?=8
+.ONESHELL:
 
 .PHONY: .uv  ## Check that uv is installed
 .uv:
@@ -73,16 +74,16 @@ endif
 	@echo "Current version: $$(uv version)"
 	@echo "Bumping $(BUMP) version..."
 	@uv version --bump $(BUMP)
-	$(eval NEW_VERSION := $(shell uv version))
-	@echo "New version: v$(NEW_VERSION)"
+	@NEW_VERSION=$$(uv version --short)
+	@echo "New version: v$$NEW_VERSION"
 	@echo "Creating git commit and tag..."
 	@git add pyproject.toml
-	@git commit --no-verify -m "Bump version to $(NEW_VERSION)"
-	@git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
+	@git commit --no-verify -m "Bump version to $$NEW_VERSION"
+	@git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"
 	@git push
-	@git push origin tag v$(NEW_VERSION)
+	@git push origin tag v$$NEW_VERSION
 	@echo ""
-	@echo "✓ Version bumped to $(NEW_VERSION)"
+	@echo "✓ Version bumped to $$NEW_VERSION"
 	@echo "  You can now run 'uv publish' if necessary"
 
 .PHONY: help  ## Display this message
