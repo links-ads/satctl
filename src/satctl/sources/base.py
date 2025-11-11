@@ -473,6 +473,9 @@ class DataSource(ABC):
         failure = []
         num_workers = num_workers or 1
         batch_id = str(uuid.uuid4())
+        # this prevents pickle errors for unpicklable entities
+        # given we have a download_builder, the `get_downloader` will
+        # instantiate a new one next time
         self._downloader = None
 
         emit_event(
