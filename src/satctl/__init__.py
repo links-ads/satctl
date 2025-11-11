@@ -28,7 +28,7 @@ Example:
 import os
 from importlib.resources import files
 
-from satctl.sources import create_source
+from satctl.sources import create_source, list_sources
 
 # override the satpy config path, adding our own custom yaml configs
 # it is non-destructive, i.e. if the variable is already set, we append
@@ -40,4 +40,4 @@ else:
     satpy_config_path = str([satpy_config_path, local_config_path])
 os.environ["SATPY_CONFIG_PATH"] = satpy_config_path
 
-__all__ = ["create_source"]
+__all__ = ["create_source", "list_sources"]

@@ -76,6 +76,35 @@ def create_source(source_name: str, **overrides: dict[str, Any]) -> DataSource:
     )
 
 
+def list_sources(pattern: str | None = None) -> list[str]:
+    """List all registered data sources with optional filtering.
+
+    Args:
+        pattern: Optional glob pattern for filtering (e.g., "s2-*", "*-l1b")
+
+    Returns:
+        Sorted list of matching source names
+
+    Examples:
+        >>> list_sources()
+        ['modis-l1b', 'mtg-fci-l1c', 's1-grd', ...]
+
+        >>> list_sources("s2-*")
+        ['s2-l1c', 's2-l2a']
+
+        >>> list_sources("*-l1b")
+        ['modis-l1b', 'viirs-l1b']
+    """
+    from fnmatch import fnmatch
+
+    sources = registry.list()
+
+    if pattern is None:
+        return sorted(sources)
+
+    return sorted(name for name in sources if fnmatch(name, pattern))
+
+
 __all__ = [
     "DataSource",
     "EarthDataSource",
@@ -88,4 +117,5 @@ __all__ = [
     "VIIRSL1BSource",
     "MODISL1BSource",
     "create_source",
+    "list_sources",
 ]
