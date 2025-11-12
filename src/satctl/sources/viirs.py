@@ -5,7 +5,6 @@ from itertools import product
 from pathlib import Path
 from typing import Literal, TypedDict
 
-
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
@@ -222,6 +221,8 @@ class VIIRSL1BSource(VIIRSSource):
         down_builder: DownloadBuilder | None = None,
         default_authenticator: str = "earthdata",
         default_downloader: str = "http",
+        default_composite: str | None = None,
+        default_resolution: int | None = None,
         satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
         search_limit: int = DEFAULT_SEARCH_LIMIT,
@@ -233,6 +234,8 @@ class VIIRSL1BSource(VIIRSSource):
             down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
             default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
             default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
             satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
             product_type (list[Literal["mod", "img"]]): List of product types to search
             search_limit (int): Maximum number of items to return per search. Defaults to 100.
@@ -262,8 +265,8 @@ class VIIRSL1BSource(VIIRSSource):
             down_builder=down_builder,
             default_authenticator=default_authenticator,
             default_downloader=default_downloader,
-            default_composite="all_bands_m_day",
-            default_resolution=primary["resolution"],
+            default_composite=default_composite if default_composite else "1000m_bands",
+            default_resolution=default_resolution if default_resolution else primary["resolution"],
             short_name=primary["short_name"],
             version=primary["version"],
             search_limit=search_limit,

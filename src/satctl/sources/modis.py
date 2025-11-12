@@ -5,7 +5,6 @@ from itertools import product
 from pathlib import Path
 from typing import Literal, TypedDict
 
-
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
@@ -228,6 +227,8 @@ class MODISL1BSource(MODISSource):
         down_builder: DownloadBuilder | None = None,
         default_authenticator: str = "earthdata",
         default_downloader: str = "http",
+        default_composite: str | None = None,
+        default_resolution: int | None = None,
     ):
         """Initialize MODIS Level 1B data source.
 
@@ -239,6 +240,8 @@ class MODISL1BSource(MODISSource):
             down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
             default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
             default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
+            default_composite (str | None): Default composite/band to load. Defaults to None.
+            default_resolution (int | None): Default resolution in meters. Defaults to None.
         """
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []
@@ -263,8 +266,8 @@ class MODISL1BSource(MODISSource):
             auth_builder=auth_builder,
             down_builder=down_builder,
             short_name=primary["short_name"],
-            default_composite="all_bands_1km_day",
-            default_resolution=primary["resolution_meters"],
+            default_composite=default_composite if default_composite else "1000m_bands",
+            default_resolution=default_resolution if default_resolution else primary["resolution_meters"],
             default_authenticator=default_authenticator,
             default_downloader=default_downloader,
             version=primary["version"],
