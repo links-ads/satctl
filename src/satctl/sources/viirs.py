@@ -5,18 +5,15 @@ from itertools import product
 from pathlib import Path
 from typing import Literal, TypedDict
 
-import xarray as xr
 
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
-    DAY_NIGHT_CONDITIONS,
     DEFAULT_SEARCH_LIMIT,
     EarthDataSource,
     ParsedGranuleId,
 )
-from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
@@ -150,51 +147,6 @@ class VIIRSSource(EarthDataSource):
             raise ValueError("Local path is missing. Did you download this granule?")
         return list(item.local_path.glob("*.nc"))
 
-    def _get_day_night_flag(self, files: list[Path | str]) -> str:
-        """Extract day/night flag from the first file's metadata.
-
-        Args:
-            files: List of file paths to process
-
-        Returns:
-            Day/night flag as lowercase string (e.g., "day", "night", or raw value)
-        """
-        with xr.open_dataset(files[0]) as ds:
-            return str(ds.attrs.get("DayNightFlag", "Not found")).lower()
-
-    def _select_automatic_dataset(self, granule_id: str, day_night_flag: str, writer: Writer) -> dict[str, str]:
-        """Select appropriate dataset automatically based on product type and day/night flag.
-
-        Args:
-            granule_id: Granule identifier
-            day_night_flag: Day/night condition flag
-            writer: Writer instance for parsing datasets
-
-        Returns:
-            Dictionary of selected dataset
-
-        Raises:
-            ValueError: If product type is unknown or day/night flag not recognized
-        """
-        parsed = self._parse_granule_id(granule_id)
-        product_type = parsed.product_type
-
-        # Default to day if flag is not recognized
-        if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            log.debug("DayNightFlag '%s' not recognized for %s, defaulting to 'day'", day_night_flag, granule_id)
-            day_night_flag = "day"
-
-        # Map product type and day/night flag to correct composite
-        if product_type == "MOD":
-            selected_composite = f"all_bands_m_{day_night_flag}"
-        elif product_type == "IMG":
-            selected_composite = f"all_bands_h_{day_night_flag}"
-        else:
-            raise ValueError(f"Unknown product type '{product_type}' for automatic dataset selection")
-
-        log.debug("Automatically selected dataset: %s", selected_composite)
-        return writer.parse_datasets(selected_composite)
-
     def _get_georeference_short_name(self, radiance_short_name: str) -> str:
         """Get VIIRS georeference short_name from radiance short_name.
 
@@ -310,7 +262,7 @@ class VIIRSL1BSource(VIIRSSource):
             down_builder=down_builder,
             default_authenticator=default_authenticator,
             default_downloader=default_downloader,
-            default_composite="automatic",
+            default_composite="all_bands_m_day",
             default_resolution=primary["resolution"],
             short_name=primary["short_name"],
             version=primary["version"],
