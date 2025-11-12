@@ -5,18 +5,15 @@ from itertools import product
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from pyhdf.SD import SD, SDC
 
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
-    DAY_NIGHT_CONDITIONS,
     DEFAULT_SEARCH_LIMIT,
     EarthDataSource,
     ParsedGranuleId,
 )
-from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
@@ -150,73 +147,6 @@ class MODISSource(EarthDataSource):
             raise ValueError("Local path is missing. Did you download this granule?")
         return [str(p) for p in item.local_path.glob("*.hdf")]
 
-    def _get_day_night_flag(self, files: list[Path | str]) -> str:
-        """Extract day/night flag from the first file's metadata.
-
-        Args:
-            files: List of file paths to process
-
-        Returns:
-            Day/night flag as lowercase string (e.g., "day", "night", or raw value)
-        """
-        try:
-            # Open HDF file and read CoreMetadata
-            hdf = SD(str(files[1]), SDC.READ)
-            core_meta = hdf.attributes().get("CoreMetadata.0", "")
-            hdf.end()
-
-            # Parse DAYNIGHTFLAG from CoreMetadata using regex
-            match = re.search(
-                r'OBJECT\s*=\s*DAYNIGHTFLAG.*?VALUE\s*=\s*"([^"]+)"',
-                core_meta,
-                re.DOTALL,
-            )
-
-            if match:
-                return match.group(1).lower()
-
-            log.warning("DAYNIGHTFLAG not found in CoreMetadata, defaulting to 'day'")
-            return "day"
-
-        except Exception as e:
-            log.warning("Failed to extract day/night flag: %s, defaulting to 'day'", e)
-            return "day"
-
-    def _select_automatic_dataset(self, granule_id: str, day_night_flag: str, writer: Writer) -> dict[str, str]:
-        """Select appropriate dataset automatically based on resolution and day/night flag.
-
-        Args:
-            granule_id: Granule identifier
-            day_night_flag: Day/night condition flag
-            writer: Writer instance for parsing datasets
-
-        Returns:
-            Dictionary of selected dataset
-
-        Raises:
-            ValueError: If resolution is unknown or day/night flag not recognized
-        """
-        parsed = self._parse_granule_id(granule_id)
-        resolution = parsed.product_type
-
-        # Default to day if flag is not recognized
-        if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            log.debug("DayNightFlag '%s' not recognized for %s, defaulting to 'day'", day_night_flag, granule_id)
-            day_night_flag = "day"
-
-        # Map resolution and day/night flag to correct composite
-        if resolution == "QKM":
-            selected_composite = f"all_bands_250m_{day_night_flag}"
-        elif resolution == "HKM":
-            selected_composite = f"all_bands_500m_{day_night_flag}"
-        elif resolution == "1KM":
-            selected_composite = f"all_bands_1km_{day_night_flag}"
-        else:
-            raise ValueError(f"Unknown resolution '{resolution}' for automatic dataset selection")
-
-        log.debug("Automatically selected dataset: %s", selected_composite)
-        return writer.parse_datasets(selected_composite)
-
     def _get_georeference_short_name(self, radiance_short_name: str) -> str:
         """Get MODIS georeference short_name from radiance short_name.
 
@@ -333,7 +263,7 @@ class MODISL1BSource(MODISSource):
             auth_builder=auth_builder,
             down_builder=down_builder,
             short_name=primary["short_name"],
-            default_composite="automatic",
+            default_composite="all_bands_1km_day",
             default_resolution=primary["resolution_meters"],
             default_authenticator=default_authenticator,
             default_downloader=default_downloader,

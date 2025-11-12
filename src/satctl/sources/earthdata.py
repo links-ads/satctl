@@ -25,7 +25,6 @@ EARTHDATA_ASSET_KEY_MAPPING = {
     "3": "doi",
 }
 
-DAY_NIGHT_CONDITIONS = ("day", "night")
 DEFAULT_SEARCH_LIMIT = 100
 
 
@@ -166,35 +165,6 @@ class EarthDataSource(DataSource):
 
         Raises:
             ValueError: If local_path is not set
-        """
-        ...
-
-    @abstractmethod
-    def _get_day_night_flag(self, files: list[Path | str]) -> str:
-        """Extract day/night flag from file metadata.
-
-        Args:
-            files (list[Path | str]): List of file paths to process
-
-        Returns:
-            str: Day/night flag as lowercase string (e.g., "day", "night")
-        """
-        ...
-
-    @abstractmethod
-    def _select_automatic_dataset(self, granule_id: str, day_night_flag: str, writer: Writer) -> dict[str, str]:
-        """Select appropriate dataset automatically based on sensor and conditions.
-
-        Args:
-            granule_id (str): Granule identifier
-            day_night_flag (str): Day/night condition flag
-            writer (Writer): Writer instance for parsing datasets
-
-        Returns:
-            dict[str, str]: Dictionary of selected dataset
-
-        Raises:
-            ValueError: If automatic selection cannot be performed
         """
         ...
 
@@ -434,35 +404,6 @@ class EarthDataSource(DataSource):
         item.to_file(granule_dir)
         return True
 
-    def _filter_datasets_by_day_night(
-        self,
-        datasets_dict: dict[str, str],
-        day_night_flag: str,
-        granule_id: str,
-    ) -> dict[str, str]:
-        """Filter datasets that don't match the day/night condition.
-
-        Args:
-            datasets_dict (dict[str, str]): Dictionary of dataset names to file names
-            day_night_flag (str): Day/night condition flag
-            granule_id (str): Granule identifier for logging
-
-        Returns:
-            dict[str, str]: Filtered dictionary with only compatible datasets
-        """
-        if day_night_flag not in DAY_NIGHT_CONDITIONS:
-            return datasets_dict
-
-        filtered = datasets_dict.copy()
-        for dataset_name in list(datasets_dict.keys()):
-            if day_night_flag not in dataset_name.lower():
-                del filtered[dataset_name]
-                log.warning(
-                    f"Skipping dataset '{dataset_name}' for granule {granule_id}: "
-                    f"dataset requires different day/night condition (data is {day_night_flag})"
-                )
-        return filtered
-
     def save_item(
         self,
         item: Granule,
@@ -489,19 +430,6 @@ class EarthDataSource(DataSource):
         # Parse datasets using base class helper
         datasets_dict = self._prepare_datasets(writer, params)
 
-        # Check for automatic dataset selection
-        auto_select = False
-        automatic_keys = [key for key in datasets_dict.keys() if key.lower() == "automatic"]
-
-        if automatic_keys:
-            if len(datasets_dict) > 1:
-                raise ValueError(
-                    "Cannot mix 'automatic' with other datasets. "
-                    "Either use 'automatic' alone or specify explicit datasets."
-                )
-            auto_select = True
-            log.debug("Automatic dataset selection enabled")
-
         # Filter existing files using base class helper
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
@@ -510,23 +438,9 @@ class EarthDataSource(DataSource):
             log.debug("All datasets already exist for %s, skipping", item.granule_id)
             return {item.granule_id: []}
 
-        # Get files and extract day/night flag
+        # Get files for processing
         files = self.get_files(item)
         log.debug("Found %d files to process", len(files))
-        day_night_flag = self._get_day_night_flag(files)
-
-        # Handle dataset selection based on day/night mode
-        if auto_select:
-            datasets_dict = self._select_automatic_dataset(item.granule_id, day_night_flag, writer)
-        else:
-            datasets_dict = self._filter_datasets_by_day_night(datasets_dict, day_night_flag, item.granule_id)
-            if not datasets_dict:
-                log.warning(
-                    "All datasets incompatible with day/night flag (%s) for %s, skipping",
-                    day_night_flag,
-                    item.granule_id,
-                )
-                return {item.granule_id: []}
 
         # Load and resample scene
         log.debug("Loading and resampling scene")
