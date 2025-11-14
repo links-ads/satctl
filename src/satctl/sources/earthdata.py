@@ -71,6 +71,23 @@ def parse_umm_assets(umm_result: dict, asset_class: type[BaseModel] = EarthDataA
     }
 
 
+def parse_day_night_flag(umm_result: dict) -> str | None:
+    """Parse DayNightFlag from UMM search result.
+
+    Args:
+        umm_result (dict): UMM format result from earthaccess search
+
+    Returns:
+        str | None: Lowercase flag value ("day", "night", "both", "unspecified") or None if missing
+    """
+    try:
+        flag = umm_result["umm"]["DataGranule"]["DayNightFlag"]
+        return flag.lower()
+    except (KeyError, AttributeError):
+        # Field not present or structure different
+        return None
+
+
 class EarthDataSource(DataSource):
     """Base class for NASA EarthData sources.
 
@@ -289,6 +306,7 @@ class EarthDataSource(DataSource):
                         "georeference": parse_umm_assets(georeference_result, EarthDataAsset),
                     },
                     info=self._parse_item_name(radiance_id),
+                    day_night_flag=parse_day_night_flag(radiance_result),
                 )
             )
 
@@ -353,6 +371,7 @@ class EarthDataSource(DataSource):
                 "georeference": parse_umm_assets(georeference_result, EarthDataAsset),
             },
             info=self._parse_item_name(radiance_id),
+            day_night_flag=parse_day_night_flag(radiance_result),
         )
 
     def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
