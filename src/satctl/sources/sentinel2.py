@@ -229,19 +229,19 @@ class Sentinel2Source(DataSource):
     def load_scene(
         self,
         item: Granule,
+        reader: str | None = None,
         datasets: list[str] | None = None,
-        generate: bool = False,
-        calibration: str = "counts",
+        lazy: bool = False,
         **scene_options: Any,
     ) -> Scene:
         """Load a Sentinel-2 scene with specified calibration.
 
         Args:
             item (Granule): Granule to load
-            datasets (list[str] | None): List of datasets/composites to load. Defaults to None.
-            generate (bool): Whether to generate composites. Defaults to False.
-            calibration (str): Calibration type - 'counts' (DN 0-10000) or 'reflectance' (percentage 0-100%). Defaults to 'counts'.
-            **scene_options (Any): Additional keyword arguments passed to Scene reader
+            reader (str | None): Optional custom reader for extra customization.
+            datasets (list[str] | None): List of datasets/composites to load. Defaults to None (uses default_composite).
+            lazy (bool): Whether to lazily return the scene without loading datasets. Defaults to False.
+            **scene_options (Any): Additional keyword arguments passed to Scene reader to Scene reader
 
         Returns:
             Scene: Loaded satpy Scene object
@@ -249,19 +249,16 @@ class Sentinel2Source(DataSource):
         Raises:
             ValueError: If datasets is None and no default_composite is set
         """
-        if not datasets:
-            if self.default_composite is None:
-                raise ValueError(
-                    "Invalid configuration: datasets parameter is required when no default composite is set"
-                )
-            datasets = [self.default_composite]
-        scene = Scene(
-            filenames=self.get_files(item),
-            reader=self.reader,
-            reader_kwargs=scene_options,
+        scene = super().load_scene(
+            item,
+            reader=reader,
+            datasets=datasets,
+            lazy=True,
+            scene_options=scene_options,
         )
         # Load with specified calibration
-        scene.load(datasets, calibration=calibration)
+        if not lazy:
+            scene.load(datasets, calibration="counts")
         return scene
 
     def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:

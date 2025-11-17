@@ -1,0 +1,365 @@
+
+reader:
+  name: slstr_l1b_004
+  short_name: SLSTR l1b (rev.004)
+  long_name: Sentinel-3 A and B SLSTR L1B, revision 4
+  description: NC Reader for SLSTR data after Jan 2020
+  status: Alpha
+  supports_fsspec: false
+  sensors: [slstr]
+  default_channels: []
+  reader: !!python/name:satpy.readers.core.yaml_reader.FileYAMLReader
+
+  data_identification_keys:
+    name:
+      required: true
+    wavelength:
+      type: !!python/name:satpy.dataset.dataid.WavelengthRange
+    resolution:
+      transitive: false
+    calibration:
+      enum:
+          - reflectance
+          - brightness_temperature
+          - radiance
+          - counts
+      transitive: true
+    view:
+      enum:
+        - nadir
+        - oblique
+      transitive: true
+    stripe:
+      enum:
+        - a
+        - b
+        - i
+        - f
+    modifiers:
+      default: []
+      type: !!python/name:satpy.dataset.dataid.ModifierTuple
+
+  coord_identification_keys:
+    name:
+      required: true
+    resolution:
+      transitive: false
+    view:
+      enum:
+        - nadir
+        - oblique
+      transitive: true
+    stripe:
+      enum:
+        - a
+        - b
+        - i
+        - f
+
+file_types:
+    esa_l1b_refl:
+        file_reader: !!python/name:satpy.readers.slstr_l1b.NCSLSTR1B
+        file_patterns: ['{mission_id:3s}_SL_{processing_level:1s}_{datatype_id:_<6s}_{start_time:%Y%m%dT%H%M%S}_{end_time:%Y%m%dT%H%M%S}_{creation_time:%Y%m%dT%H%M%S}_{duration:4d}_{cycle:3d}_{relative_orbit:3d}_{frame:4s}_{centre:3s}_{mode:1s}_{timeliness:2s}_{collection:3s}.SEN3/{dataset_name}_radiance_{stripe:1s}{view:1s}.nc']
+    esa_l1b_tir:
+        file_reader: !!python/name:satpy.readers.slstr_l1b.NCSLSTR1B
+        file_patterns: ['{mission_id:3s}_SL_{processing_level:1s}_{datatype_id:_<6s}_{start_time:%Y%m%dT%H%M%S}_{end_time:%Y%m%dT%H%M%S}_{creation_time:%Y%m%dT%H%M%S}_{duration:4d}_{cycle:3d}_{relative_orbit:3d}_{frame:4s}_{centre:3s}_{mode:1s}_{timeliness:2s}_{collection:3s}.SEN3/{dataset_name}_BT_{stripe:1s}{view:1s}.nc']
+    esa_angles:
+        file_reader: !!python/name:satpy.readers.slstr_l1b.NCSLSTRAngles
+        file_patterns: ['{mission_id:3s}_SL_{processing_level:1s}_{datatype_id:_<6s}_{start_time:%Y%m%dT%H%M%S}_{end_time:%Y%m%dT%H%M%S}_{creation_time:%Y%m%dT%H%M%S}_{duration:4d}_{cycle:3d}_{relative_orbit:3d}_{frame:4s}_{centre:3s}_{mode:1s}_{timeliness:2s}_{collection:3s}.SEN3/geometry_t{view:1s}.nc']
+    esa_geo:
+        file_reader: !!python/name:satpy.readers.slstr_l1b.NCSLSTRGeo
+        file_patterns: ['{mission_id:3s}_SL_{processing_level:1s}_{datatype_id:_<6s}_{start_time:%Y%m%dT%H%M%S}_{end_time:%Y%m%dT%H%M%S}_{creation_time:%Y%m%dT%H%M%S}_{duration:4d}_{cycle:3d}_{relative_orbit:3d}_{frame:4s}_{centre:3s}_{mode:1s}_{timeliness:2s}_{collection:3s}.SEN3/geodetic_{stripe:1s}{view:1s}.nc']
+    esa_l1b_flag:
+        file_reader: !!python/name:satpy.readers.slstr_l1b.NCSLSTRFlag
+        file_patterns: ['{mission_id:3s}_SL_{processing_level:1s}_{datatype_id:_<6s}_{start_time:%Y%m%dT%H%M%S}_{end_time:%Y%m%dT%H%M%S}_{creation_time:%Y%m%dT%H%M%S}_{duration:4d}_{cycle:3d}_{relative_orbit:3d}_{frame:4s}_{centre:3s}_{mode:1s}_{timeliness:2s}_{collection:3s}.SEN3/flags_{stripe:1s}{view:1s}.nc']
+
+datasets:
+  longitude:
+    name: longitude
+    resolution: [500, 1000]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_geo
+    file_key: longitude_{stripe:1s}{view:1s}
+    standard_name: longitude
+    units: degree
+
+  latitude:
+    name: latitude
+    resolution: [500, 1000]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_geo
+    file_key: latitude_{stripe:1s}{view:1s}
+    standard_name: latitude
+    units: degree
+
+  elevation:
+    name: elevation
+    resolution: [500, 1000]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_geo
+    file_key: elevation_{stripe:1s}{view:1s}
+    standard_name: elevation
+    units: m
+
+  # The channels S1-S3 are available in nadir (default) and oblique view.
+  S1:
+    name: S1
+    sensor: slstr
+    wavelength: [0.545,0.555,0.565]
+    resolution: 500
+    view: [nadir, oblique]
+    stripe: [a, b]
+    calibration:
+      reflectance:
+        standard_name: toa_bidirectional_reflectance
+        units: "%"
+      radiance:
+        standard_name: toa_outgoing_radiance_per_unit_wavelength
+        units: W m-2 um-1 sr-1
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_refl
+
+  S2:
+    name: S2
+    sensor: slstr
+    wavelength: [0.649, 0.659, 0.669]
+    resolution: 500
+    view: [nadir, oblique]
+    stripe: [a, b]
+    calibration:
+      reflectance:
+        standard_name: toa_bidirectional_reflectance
+        units: "%"
+      radiance:
+        standard_name: toa_outgoing_radiance_per_unit_wavelength
+        units: W m-2 um-1 sr-1
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_refl
+
+  S3:
+    name: S3
+    sensor: slstr
+    wavelength: [0.855, 0.865, 0.875]
+    resolution: 500
+    view: [nadir, oblique]
+    stripe: [a, b]
+    calibration:
+      reflectance:
+        standard_name: toa_bidirectional_reflectance
+        units: "%"
+      radiance:
+        standard_name: toa_outgoing_radiance_per_unit_wavelength
+        units: W m-2 um-1 sr-1
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_refl
+
+  # The channels S4-S6 are available in nadir (default) and oblique view and for both in the
+  # a,b and c stripes.
+  S4:
+    name: S4
+    sensor: slstr
+    wavelength: [1.3675, 1.375, 1.36825]
+    resolution: 500
+    view: [nadir, oblique]
+    stripe: [a, b]
+    calibration:
+      reflectance:
+        standard_name: toa_bidirectional_reflectance
+        units: "%"
+      radiance:
+        standard_name: toa_outgoing_radiance_per_unit_wavelength
+        units: W m-2 um-1 sr-1
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_refl
+
+  S5:
+    name: S5
+    sensor: slstr
+    wavelength: [1.58, 1.61, 1.64]
+    resolution: 500
+    view: [nadir, oblique]
+    stripe: [a, b]
+    calibration:
+      reflectance:
+        standard_name: toa_bidirectional_reflectance
+        units: "%"
+      radiance:
+        standard_name: toa_outgoing_radiance_per_unit_wavelength
+        units: W m-2 um-1 sr-1
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_refl
+
+  S6:
+    name: S6
+    sensor: slstr
+    wavelength: [2.225, 2.25, 2.275]
+    resolution: 500
+    view: [nadir, oblique]
+    stripe: [a, b]
+    calibration:
+      reflectance:
+        standard_name: toa_bidirectional_reflectance
+        units: "%"
+      radiance:
+        standard_name: toa_outgoing_radiance_per_unit_wavelength
+        units: W m-2 um-1 sr-1
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_refl
+
+  # The channels S7-S9, F1 and F2 are available in nadir (default) and oblique view.
+  S7:
+    name: S7
+    sensor: slstr
+    wavelength: [3.55, 3.74, 3.93]
+    resolution: 1000
+    view: [nadir, oblique]
+    stripe: i
+    calibration:
+      brightness_temperature:
+        standard_name: toa_brightness_temperature
+        units: "K"
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_tir
+
+  S8:
+    name: S8
+    sensor: slstr
+    wavelength: [10.4, 10.85, 11.3]
+    resolution: 1000
+    view: [nadir, oblique]
+    stripe: i
+    calibration:
+      brightness_temperature:
+        standard_name: toa_brightness_temperature
+        units: "K"
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_tir
+
+  S9:
+    name: S9
+    sensor: slstr
+    wavelength: [11.57, 12.0225, 12.475]
+    resolution: 1000
+    view: [nadir, oblique]
+    stripe: i
+    calibration:
+      brightness_temperature:
+        standard_name: toa_brightness_temperature
+        units: "K"
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_tir
+
+  F1:
+    name: F1
+    sensor: slstr
+    wavelength: [3.55, 3.74, 3.93]
+    resolution: 1000
+    view: [nadir, oblique]
+    stripe: f
+    calibration:
+      brightness_temperature:
+        standard_name: toa_brightness_temperature
+        units: "K"
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_tir
+
+  F2:
+    name: F2
+    sensor: slstr
+    wavelength: [10.4, 10.85, 11.3]
+    resolution: 1000
+    view: [nadir, oblique]
+    stripe: i
+    calibration:
+      brightness_temperature:
+        standard_name: toa_brightness_temperature
+        units: "K"
+    coordinates: [longitude, latitude]
+    file_type: esa_l1b_tir
+
+
+  solar_zenith_angle:
+    name: solar_zenith_angle
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    standard_name: solar_zenith_angle
+    file_type: esa_angles
+    file_key: solar_zenith_t{view:1s}
+
+  solar_azimuth_angle:
+    name: solar_azimuth_angle
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    standard_name: solar_azimuth_angle
+    file_type: esa_angles
+    file_key: solar_azimuth_t{view:1s}
+
+  satellite_zenith_angle:
+    name: satellite_zenith_angle
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    standard_name: satellite_zenith_angle
+    file_type: esa_angles
+    file_key: sat_zenith_t{view:1s}
+
+  satellite_azimuth_angle:
+    name: satellite_azimuth_angle
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    standard_name: satellite_azimuth_angle
+    file_type: esa_angles
+    file_key: sat_azimuth_t{view:1s}
+
+# CloudFlags are all bitfields. They are available in nadir (default) and oblique view for
+# each of the a,b,c,i stripes.
+  cloud:
+    name: cloud
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_l1b_flag
+    file_key: cloud_{stripe:1s}{view:1s}
+
+  confidence:
+    name: confidence
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_l1b_flag
+    file_key: confidence_{stripe:1s}{view:1s}
+
+
+  pointing:
+    name: pointing
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_l1b_flag
+    file_key: pointing_{stripe:1s}{view:1s}
+
+  bayes:
+    name: bayes
+    sensor: slstr
+    resolution: [500, 1000]
+    coordinates: [longitude, latitude]
+    view: [nadir, oblique]
+    stripe: [a, b, i, f]
+    file_type: esa_l1b_flag
+    file_key: bayes_{stripe:1s}{view:1s}
