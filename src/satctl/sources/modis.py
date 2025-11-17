@@ -9,7 +9,6 @@ from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
-    DEFAULT_SEARCH_LIMIT,
     EarthDataSource,
     ParsedGranuleId,
 )
@@ -55,7 +54,6 @@ class MODISSource(EarthDataSource):
         default_downloader: str = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize MODIS data source.
 
@@ -70,7 +68,6 @@ class MODISSource(EarthDataSource):
             default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -83,7 +80,6 @@ class MODISSource(EarthDataSource):
             default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
-            search_limit=search_limit,
         )
 
     def _parse_granule_id(self, granule_id: str) -> ParsedGranuleId:
@@ -201,7 +197,6 @@ class MODISL1BSource(MODISSource):
         downloader: HTTP downloader instance
         platform: List of satellite platforms - ["mod"] (Terra), ["myd"] (Aqua)
         resolution: List of resolutions - ["qkm"] (250m), ["hkm"] (500m), ["1km"] (1000m)
-        search_limit: Maximum number of granules to return in search results per combination
 
     Examples:
         # Single combination
@@ -222,7 +217,6 @@ class MODISL1BSource(MODISSource):
         *,
         platform: list[Literal["mod", "myd"]],
         resolution: list[Literal["qkm", "hkm", "1km"]],
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
         auth_builder: AuthBuilder | None = None,
         down_builder: DownloadBuilder | None = None,
         default_authenticator: str = "earthdata",
@@ -235,7 +229,6 @@ class MODISL1BSource(MODISSource):
         Args:
             platform (list[Literal["mod", "myd"]]): List of satellite platforms to search
             resolution (list[Literal["qkm", "hkm", "1km"]]): List of resolutions to search
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
             auth_builder (AuthBuilder | None): Factory that creates an authenticator object on demand. Defaults to None.
             down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
             default_authenticator (str): Default authenticator name to use when auth_builder is None. Defaults to "earthdata".
@@ -271,7 +264,6 @@ class MODISL1BSource(MODISSource):
             default_authenticator=default_authenticator,
             default_downloader=default_downloader,
             version=primary["version"],
-            search_limit=search_limit,
         )
 
     def search(self, params: SearchParams) -> list[Granule]:

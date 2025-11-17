@@ -17,9 +17,6 @@ from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
-# Constants
-DEFAULT_SEARCH_LIMIT = 100
-
 
 class S2Asset(BaseModel):
     href: str
@@ -67,7 +64,6 @@ class Sentinel2Source(DataSource):
         default_downloader: str | None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize Sentinel-2 source.
 
@@ -81,7 +77,6 @@ class Sentinel2Source(DataSource):
             default_downloader (str | None): Default downloader name to use when down_builder is None.
             default_composite (str | None): Default composite name. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum search results. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -94,7 +89,6 @@ class Sentinel2Source(DataSource):
         )
         self.reader = reader
         self.stac_url = stac_url
-        self.search_limit = search_limit
 
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -125,7 +119,7 @@ class Sentinel2Source(DataSource):
             collections=self.collections,
             intersects=params.area_geometry,
             datetime=(params.start, params.end),
-            max_items=self.search_limit,
+            max_items=params.search_limit,
         )
         items = [
             Granule(
@@ -458,7 +452,6 @@ class Sentinel2L2ASource(Sentinel2Source):
             default_composite=default_composite,
             default_resolution=default_resolution,
             stac_url=stac_url,
-            search_limit=search_limit,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -551,7 +544,6 @@ class Sentinel2L1CSource(Sentinel2Source):
             default_composite=default_composite,
             default_resolution=default_resolution,
             stac_url=stac_url,
-            search_limit=search_limit,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:

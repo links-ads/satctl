@@ -38,7 +38,6 @@ class TestSentinel2L2AIntegration(IntegrationTestBase):
                 auth_builder=configure_authenticator("s3"),
                 down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper
@@ -201,7 +200,6 @@ class TestSentinel2L1CIntegration(IntegrationTestBase):
                 auth_builder=configure_authenticator("s3"),
                 down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper
