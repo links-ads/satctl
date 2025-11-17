@@ -17,9 +17,6 @@ from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
-# Constants
-DEFAULT_SEARCH_LIMIT = 100
-
 
 class S3Asset(BaseModel):
     href: str
@@ -41,7 +38,6 @@ class Sentinel3Source(DataSource):
         default_downloader: str | None,
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize Sentinel-3 data source.
 
@@ -55,7 +51,6 @@ class Sentinel3Source(DataSource):
             default_downloader (str | None): Default downloader name to use when down_builder is None.
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -68,7 +63,6 @@ class Sentinel3Source(DataSource):
         )
         self.reader = reader
         self.stac_url = stac_url
-        self.search_limit = search_limit
 
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -99,7 +93,7 @@ class Sentinel3Source(DataSource):
             collections=self.collections,
             intersects=params.area_geometry,
             datetime=(params.start, params.end),
-            max_items=self.search_limit,
+            max_items=params.search_limit,
         )
         items = [
             Granule(
@@ -278,7 +272,6 @@ class SLSTRSource(Sentinel3Source):
         default_downloader: str | None = "http",
         default_composite: str = "all_bands",
         default_resolution: int = 1000,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize Sentinel-3 SLSTR data source.
 
@@ -290,7 +283,6 @@ class SLSTRSource(Sentinel3Source):
             default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str): Default composite/band to load. Defaults to "all_bands".
             default_resolution (int): Default resolution in meters. Defaults to 1000.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             "sentinel-3-sl-1-rbt-ntc",
@@ -302,7 +294,6 @@ class SLSTRSource(Sentinel3Source):
             default_composite=default_composite,
             default_resolution=default_resolution,
             stac_url=stac_url,
-            search_limit=search_limit,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -347,7 +338,6 @@ class OLCISource(Sentinel3Source):
         default_downloader: str | None = "http",
         default_composite: str = "all_bands",
         default_resolution: int = 300,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize Sentinel-3 OLCI data source.
 
@@ -359,7 +349,6 @@ class OLCISource(Sentinel3Source):
             default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str): Default composite/band to load. Defaults to "all_bands".
             default_resolution (int): Default resolution in meters. Defaults to 300.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             "sentinel-3-olci-1-efr-ntc",
@@ -371,7 +360,6 @@ class OLCISource(Sentinel3Source):
             default_composite=default_composite,
             default_resolution=default_resolution,
             stac_url=stac_url,
-            search_limit=search_limit,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:

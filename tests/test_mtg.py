@@ -45,7 +45,6 @@ class TestMTGIntegration(IntegrationTestBase):
                 reader="fci_l1c_nc",  # FCI Level 1C NetCDF reader
                 default_composite="simple_fci_fire_mask",  # Or whatever your default composite is
                 default_resolution=2000,  # 2km resolution for FCI
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper

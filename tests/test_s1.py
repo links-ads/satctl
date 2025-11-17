@@ -44,7 +44,6 @@ class TestSentinel1GRDIntegration(IntegrationTestBase):
                 down_builder=configure_downloader("s3"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
                 composite="s1_dual_pol",  # Or whatever your default SAR composite is
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper

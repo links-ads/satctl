@@ -41,7 +41,6 @@ class TestSLSTRIntegration(IntegrationTestBase):
                 auth_builder=configure_authenticator("odata"),
                 down_builder=configure_downloader("http"),
                 stac_url="https://stac.dataspace.copernicus.eu/v1",
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper
