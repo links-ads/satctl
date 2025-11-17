@@ -193,34 +193,32 @@ class MTGSource(DataSource):
     def load_scene(
         self,
         item: Granule,
+        reader: str | None = None,
         datasets: list[str] | None = None,
-        generate: bool = False,
-        **scene_options: dict[str, Any],
+        lazy: bool = False,
+        **scene_options: Any,
     ) -> Scene:
-        """Load MTG data into a Satpy Scene.
+        """Load a Sentinel-2 scene with specified calibration.
 
         Args:
             item (Granule): Granule to load
-            datasets (list[str] | None): List of dataset names to load. Defaults to None.
-            generate (bool): Whether to generate composites. Defaults to False.
-            **scene_options (dict[str, Any]): Additional scene options
+            reader (str | None): Optional custom reader for extra customization.
+            datasets (list[str] | None): List of datasets/composites to load. Defaults to None (uses default_composite).
+            lazy (bool): Whether to lazily return the scene without loading datasets. Defaults to False.
+            **scene_options (Any): Additional keyword arguments passed to Scene reader to Scene reader
 
         Returns:
-            Scene: Loaded Satpy scene with requested datasets
+            Scene: Loaded satpy Scene object
 
         Raises:
-            ValueError: If datasets is None and no default composite is configured
+            ValueError: If datasets is None and no default_composite is set
         """
-        if not datasets:
-            if self.default_composite is None:
-                raise ValueError(
-                    "Invalid configuration: datasets parameter is required when no default composite is set"
-                )
-            datasets = [self.default_composite]
-        scene = Scene(
-            filenames=self.get_files(item),
-            reader=self.reader,
-            reader_kwargs=scene_options,
+        scene = super().load_scene(
+            item,
+            reader=reader,
+            datasets=datasets,
+            lazy=True,
+            scene_options=scene_options,
         )
         # note: the data inside the FCI files is stored upside down.
         # The upper_right_corner='NE' argument flips it automatically in upright position

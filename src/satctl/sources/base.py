@@ -266,16 +266,18 @@ class DataSource(ABC):
     def load_scene(
         self,
         item: Granule,
+        reader: str | None = None,
         datasets: list[str] | None = None,
-        generate: bool = False,
+        lazy: bool = False,
         **scene_options: Any,
     ) -> Scene:
         """Load a satpy Scene from granule files.
 
         Args:
             item (Granule): Granule to load
+            reader (str | None): Optional custom reader for extra customization.
             datasets (list[str] | None): List of datasets/composites to load. Defaults to None (uses default_composite).
-            generate (bool): Whether to generate composites. Defaults to False.
+            lazy (bool): Whether to lazily return the scene without loading datasets. Defaults to False.
             **scene_options (Any): Additional keyword arguments passed to Scene reader
 
         Returns:
@@ -292,10 +294,11 @@ class DataSource(ABC):
             datasets = [self.default_composite]
         scene = Scene(
             filenames=self.get_files(item),
-            reader=self.reader,
+            reader=reader or self.reader,
             reader_kwargs=scene_options,
         )
-        scene.load(datasets)
+        if not lazy:
+            scene.load(datasets)
         return scene
 
     def resample(
