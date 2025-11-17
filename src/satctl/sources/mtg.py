@@ -74,6 +74,9 @@ class MTGSource(DataSource):
         self.search_limit = search_limit
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
+        # Use synchronous dask scheduler for processing
+        dask.config.set(scheduler="synchronous")
+
     def _parse_item_name(self, name: str) -> ProductInfo:
         """Parse MTG item name into product information.
 
@@ -293,8 +296,6 @@ class MTGSource(DataSource):
         Returns:
             dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
-        # Use synchronous dask scheduler for processing
-        dask.config.set(scheduler="synchronous")
         self._validate_save_inputs(item, params)
         datasets_dict = self._prepare_datasets(writer, params)
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
