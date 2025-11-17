@@ -246,51 +246,6 @@ class Sentinel1Source(DataSource):
                 "application/xml",
             ), f"Unexpected media type for asset {name}: {asset.media_type}"
 
-    def load_scene(
-        self,
-        item: Granule,
-        datasets: list[str] | None = None,
-        generate: bool = False,
-        calibration: str = "counts",
-        **scene_options: dict[str, Any],
-    ) -> Scene:
-        """Load a Sentinel-1 scene into a Satpy Scene object.
-
-        Note: The 'calibration' parameter is currently unused but retained for
-        API compatibility. SAR calibration is typically specified in the dataset
-        name or composite definition (e.g., 'sigma_nought', 'beta_nought').
-
-        Args:
-            item: Granule to load (must have local_path set)
-            datasets: List of datasets/composites to load (e.g., ['measurement_vv'])
-            generate: Whether to generate composites (unused)
-            calibration: Calibration type - retained for compatibility but not used
-                        (actual calibration is specified in dataset queries)
-            **scene_options: Additional options passed to Scene reader_kwargs
-
-        Returns:
-            Loaded satpy Scene object with requested datasets
-
-        Raises:
-            ValueError: If datasets is None and no default composite is configured
-        """
-        if not datasets:
-            if self.default_composite is None:
-                raise ValueError("Please provide the source with a default composite, or provide custom composites")
-            datasets = [self.default_composite]
-
-        # Create scene with all files in SAFE directory
-        scene = Scene(
-            filenames=self.get_files(item),
-            reader=self.reader,
-            reader_kwargs=scene_options,
-        )
-
-        # Load datasets (calibration is handled by dataset definition, not this parameter)
-        # TODO: Remove unused calibration parameter in future version
-        scene.load(datasets, calibration=calibration)
-        return scene
-
     def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
         """Download Sentinel-1 assets and reconstruct SAFE directory structure.
 

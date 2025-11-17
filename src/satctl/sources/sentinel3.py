@@ -232,18 +232,21 @@ class Sentinel3Source(DataSource):
         Returns:
             dict[str, list]: Dictionary mapping granule_id to list of output paths
         """
-        # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
-
-        # Parse datasets using base class helper
         datasets_dict = self._prepare_datasets(writer, params)
-
-        # Filter existing files using base class helper
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
         # Load and resample scene
         log.debug("Loading and resampling scene")
-        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+
+        # workaround patch to fix broker SLSTR reader
+        # see https://github.com/pytroll/satpy/issues/3251
+        # TLDR: SLSTR revision 004 switches band F1 from stripe i to f
+        # current satpy reader does not allow for missing files
+        custom_reader = None
+        if item.info.instrument == "slstr" and item.granule_id.endswith("004"):
+            custom_reader = f"{self.reader}_rev4"
+        scene = self.load_scene(item, reader=custom_reader, datasets=list(datasets_dict.values()))
 
         # Define area using base class helper
         area_def = self.define_area(
