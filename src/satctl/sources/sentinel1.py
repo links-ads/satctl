@@ -4,11 +4,10 @@ from abc import abstractmethod
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from pydantic import BaseModel
 from pystac_client import Client
-from satpy.scene import Scene
 from xarray import DataArray
 
 from satctl.auth import AuthBuilder
