@@ -77,7 +77,7 @@ endif
 	@NEW_VERSION=$$(uv version --short)
 	@echo "New version: v$$NEW_VERSION"
 	@echo "Creating git commit and tag..."
-	@git add pyproject.toml
+	@git add .
 	@git commit --no-verify -m "Bump version to $$NEW_VERSION"
 	@git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"
 	@git push
