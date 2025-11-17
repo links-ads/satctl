@@ -226,6 +226,7 @@ class Granule(BaseModel):
     assets: dict[str, Any]  # 'Any' must be serializable
     info: ProductInfo
     local_path: Path | None = None
+    day_night_flag: str | None = None  # Day/night acquisition flag: "day", "night", "both", "unspecified"
 
     @classmethod
     def from_file(cls, path: Path) -> "Granule":

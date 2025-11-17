@@ -38,8 +38,6 @@ sources:
     default_downloader: "s3"
     stac_url: "https://stac.dataspace.copernicus.eu/v1"
     search_limit: 100
-    download_pool_conns: 1
-    download_pool_size: 1
 
   s2-l2a:
     default_authenticator: "s3"
