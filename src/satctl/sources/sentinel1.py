@@ -77,7 +77,6 @@ class Sentinel1Source(DataSource):
         default_downloader: str | None = "s3",
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = 100,
     ):
         """Initialize Sentinel-1 data source.
 
@@ -91,7 +90,6 @@ class Sentinel1Source(DataSource):
             default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "s3".
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -104,7 +102,6 @@ class Sentinel1Source(DataSource):
         )
         self.reader = reader
         self.stac_url = stac_url
-        self.search_limit = search_limit
 
     @abstractmethod
     def _parse_item_name(self, name: str) -> ProductInfo:
@@ -149,7 +146,7 @@ class Sentinel1Source(DataSource):
             collections=self.collections,
             intersects=params.area_geometry,
             datetime=(params.start, params.end),
-            max_items=self.search_limit,
+            max_items=params.search_limit,
         )
 
         # Convert STAC items to internal Granule model
@@ -490,7 +487,6 @@ class Sentinel1GRDSource(Sentinel1Source):
         down_builder: DownloadBuilder | None = None,
         default_authenticator: str | None = "s3",
         default_downloader: str | None = "s3",
-        search_limit: int = 100,
     ):
         """Initialize Sentinel-1 GRD data source.
 
@@ -501,7 +497,6 @@ class Sentinel1GRDSource(Sentinel1Source):
             down_builder (DownloadBuilder | None): Factory that creates a downloader object on demand. Defaults to None.
             default_authenticator (str | None): Default authenticator name to use when auth_builder is None. Defaults to "s3".
             default_downloader (str | None): Default downloader name to use when down_builder is None. Defaults to "s3".
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             "sentinel-1-grd",
@@ -513,7 +508,6 @@ class Sentinel1GRDSource(Sentinel1Source):
             default_composite=composite,
             default_resolution=20,  # Native GRD resolution in IW mode
             stac_url=stac_url,
-            search_limit=search_limit,
         )
 
     def _parse_item_name(self, name: str) -> ProductInfo:

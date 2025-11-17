@@ -60,6 +60,7 @@ def test_search_params():
         path=geojson_path,
         start=datetime.strptime("2024-09-01", "%Y-%m-%d"),
         end=datetime.strptime("2024-09-04", "%Y-%m-%d"),
+        search_limit=1,  # Limit results for testing
     )
 
 
@@ -83,6 +84,7 @@ def test_mtg_search_params():
         path=geojson_path,
         start=datetime.strptime("2024-09-25", "%Y-%m-%d"),
         end=datetime.strptime("2024-09-26", "%Y-%m-%d"),
+        search_limit=1,  # Limit results for testing
     )
 
 

@@ -119,6 +119,7 @@ class AreaParams(BaseModel):
 class SearchParams(AreaParams):
     start: datetime
     end: datetime
+    search_limit: int | None = None
 
     @model_validator(mode="after")
     def validate_dates(self):

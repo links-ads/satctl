@@ -40,7 +40,6 @@ class TestVIIRSL1BIntegration(IntegrationTestBase):
                 down_builder=configure_downloader("http"),
                 satellite=["vnp"],  # NPP satellite
                 product_type=["mod"],  # M-bands (750m)
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper

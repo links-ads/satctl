@@ -25,8 +25,6 @@ EARTHDATA_ASSET_KEY_MAPPING = {
     "3": "doi",
 }
 
-DEFAULT_SEARCH_LIMIT = 100
-
 
 class EarthDataAsset(BaseModel):
     """Asset model for EarthData sources."""
@@ -111,7 +109,6 @@ class EarthDataSource(DataSource):
         default_downloader: str | None = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize EarthData source.
 
@@ -126,7 +123,6 @@ class EarthDataSource(DataSource):
             version (str | None): Product version. Defaults to None.
             default_composite (str | None): Default composite name. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum search results per query. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -140,7 +136,6 @@ class EarthDataSource(DataSource):
         self.reader = reader
         self.short_name = short_name
         self.version = version
-        self.search_limit = search_limit
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
     @abstractmethod
@@ -267,8 +262,11 @@ class EarthDataSource(DataSource):
         search_kwargs: dict[str, Any] = {
             "short_name": short_name,
             "temporal": (params.start.isoformat(), params.end.isoformat()),
-            "count": self.search_limit,
         }
+
+        # Add search limit if specified (omit for unlimited results)
+        if params.search_limit is not None:
+            search_kwargs["count"] = params.search_limit
 
         # Add version if specified
         if version:

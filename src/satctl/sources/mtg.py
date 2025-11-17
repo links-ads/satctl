@@ -22,9 +22,6 @@ from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
-# Constants
-DEFAULT_SEARCH_LIMIT = 100
-
 
 class MTGAsset(BaseModel):
     href: str
@@ -46,7 +43,6 @@ class MTGSource(DataSource):
         default_downloader: str = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize MTG data source.
 
@@ -59,7 +55,6 @@ class MTGSource(DataSource):
             default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "s3".
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -71,7 +66,6 @@ class MTGSource(DataSource):
             default_resolution=default_resolution,
         )
         self.reader = reader
-        self.search_limit = search_limit
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
         # Use synchronous dask scheduler for processing
@@ -140,7 +134,7 @@ class MTGSource(DataSource):
                 ]
             )
         log.debug("Found %d items", len(items))
-        return items[: self.search_limit]
+        return items if params.search_limit is None else items[: params.search_limit]
 
     def get_by_id(self, item_id: str, **kwargs) -> Granule:
         """Get specific MTG granule by ID.

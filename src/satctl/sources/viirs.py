@@ -9,7 +9,6 @@ from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder
 from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources.earthdata import (
-    DEFAULT_SEARCH_LIMIT,
     EarthDataSource,
     ParsedGranuleId,
 )
@@ -55,7 +54,6 @@ class VIIRSSource(EarthDataSource):
         default_downloader: str = "http",
         default_composite: str | None = None,
         default_resolution: int | None = None,
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize VIIRS data source.
 
@@ -70,7 +68,6 @@ class VIIRSSource(EarthDataSource):
             default_downloader (str): Default downloader name to use when down_builder is None. Defaults to "http".
             default_composite (str | None): Default composite/band to load. Defaults to None.
             default_resolution (int | None): Default resolution in meters. Defaults to None.
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         super().__init__(
             collection_name,
@@ -83,7 +80,6 @@ class VIIRSSource(EarthDataSource):
             default_downloader=default_downloader,
             default_composite=default_composite,
             default_resolution=default_resolution,
-            search_limit=search_limit,
         )
 
     def _parse_granule_id(self, granule_id: str) -> ParsedGranuleId:
@@ -198,7 +194,6 @@ class VIIRSL1BSource(VIIRSSource):
         downloader: HTTP downloader instance
         satellite: List of satellite platforms - ["vnp"] (Suomi-NPP), ["jp1"] (NOAA-20/JPSS-1), ["jp2"] (NOAA-21/JPSS-2)
         product_type: List of product types - ["mod"] (M-bands, 750m), ["img"] (I-bands, 375m)
-        search_limit: Maximum number of granules to return in search results per combination
 
     Examples:
         # Single combination
@@ -225,7 +220,6 @@ class VIIRSL1BSource(VIIRSSource):
         default_resolution: int | None = None,
         satellite: list[Literal["vnp", "jp1", "jp2"]],
         product_type: list[Literal["mod", "img"]],
-        search_limit: int = DEFAULT_SEARCH_LIMIT,
     ):
         """Initialize VIIRS Level 1B data source.
 
@@ -238,7 +232,6 @@ class VIIRSL1BSource(VIIRSSource):
             default_resolution (int | None): Default resolution in meters. Defaults to None.
             satellite (list[Literal["vnp", "jp1", "jp2"]]): List of satellite platforms to search
             product_type (list[Literal["mod", "img"]]): List of product types to search
-            search_limit (int): Maximum number of items to return per search. Defaults to 100.
         """
         # Generate all combinations (cartesian product)
         self.combinations: list[ProductCombination] = []
@@ -269,7 +262,6 @@ class VIIRSL1BSource(VIIRSSource):
             default_resolution=default_resolution if default_resolution else primary["resolution"],
             short_name=primary["short_name"],
             version=primary["version"],
-            search_limit=search_limit,
         )
 
     def search(self, params: SearchParams) -> list[Granule]:

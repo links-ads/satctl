@@ -42,7 +42,6 @@ class TestMODISL1BIntegration(IntegrationTestBase):
                 down_builder=configure_downloader("http"),
                 platform=["mod"],  # Terra satellite
                 resolution=["1km"],  # 1km resolution
-                search_limit=1,  # Limit results for testing
             )
 
             # Verify source is configured using helper
