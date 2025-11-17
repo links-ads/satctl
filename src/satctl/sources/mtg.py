@@ -198,7 +198,7 @@ class MTGSource(DataSource):
         lazy: bool = False,
         **scene_options: Any,
     ) -> Scene:
-        """Load a Sentinel-2 scene with specified calibration.
+        """Load a MTG scene with specified calibration.
 
         Args:
             item (Granule): Granule to load
@@ -222,7 +222,8 @@ class MTGSource(DataSource):
         )
         # note: the data inside the FCI files is stored upside down.
         # The upper_right_corner='NE' argument flips it automatically in upright position
-        scene.load(datasets, upper_right_corner="NE")
+        if not lazy:
+            scene.load(datasets, upper_right_corner="NE")
         return scene
 
     def validate(self, item: Granule) -> None:

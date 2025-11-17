@@ -257,7 +257,8 @@ class Sentinel2Source(DataSource):
             scene_options=scene_options,
         )
         # Load with specified calibration
-        scene.load(datasets, calibration="counts")
+        if not lazy:
+            scene.load(datasets, calibration="counts")
         return scene
 
     def download_item(self, item: Granule, destination: Path, downloader: Downloader) -> bool:
