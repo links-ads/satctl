@@ -230,14 +230,30 @@ class Sentinel3Source(DataSource):
             force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            dict[str, list]: Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths.
+                           Empty list means all files were skipped (already exist).
+
+        Raises:
+            FileNotFoundError: If granule data not downloaded
+            ValueError: If invalid configuration
+            Exception: If processing fails (scene loading, resampling, writing)
         """
+        # Validate inputs using base class helper
         self._validate_save_inputs(item, params)
+
+        # Parse datasets using base class helper
         datasets_dict = self._prepare_datasets(writer, params)
+
+        # Filter existing files using base class helper
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
+        # Early return if no datasets to process (all files already exist)
+        if not datasets_dict:
+            log.info("Skipping %s - all datasets already exist", item.granule_id)
+            return {item.granule_id: []}
+
         # Load and resample scene
-        log.debug("Loading and resampling scene")
+        log.debug("Loading and resampling scene for %s", item.granule_id)
 
         # workaround patch to fix broker SLSTR reader
         # see https://github.com/pytroll/satpy/issues/3251
@@ -259,7 +275,12 @@ class Sentinel3Source(DataSource):
         scene = self.resample(scene, area_def=area_def)
 
         # Write datasets using base class helper
-        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+        result = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+
+        # Log success
+        num_files = len(result.get(item.granule_id, []))
+        log.info("Successfully processed %s - wrote %d file(s)", item.granule_id, num_files)
+        return result
 
 
 class SLSTRSource(Sentinel3Source):

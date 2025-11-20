@@ -1,12 +1,10 @@
 import logging
 import re
-import threading
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-import dask.config
 import numpy as np
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
@@ -15,7 +13,7 @@ from satpy.scene import Scene
 from satctl.auth import AuthBuilder
 from satctl.auth.eumetsat import EUMETSATAuthenticator
 from satctl.downloaders import DownloadBuilder, Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
+from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
 from satctl.writers import Writer
@@ -29,8 +27,6 @@ class MTGAsset(BaseModel):
 
 class MTGSource(DataSource):
     """Source for EUMETSAT MTG product"""
-
-    _netcdf_lock = threading.Lock()
 
     def __init__(
         self,
@@ -221,6 +217,8 @@ class MTGSource(DataSource):
         # The upper_right_corner='NE' argument flips it automatically in upright position
         if not lazy:
             scene.load(datasets, upper_right_corner="NE")
+            # Compute scene to avoid issues with resampling (MTG-specific requirement)
+            scene = scene.compute()
         return scene
 
     def validate(self, item: Granule) -> None:
@@ -265,50 +263,6 @@ class MTGSource(DataSource):
         else:
             log.warning("Failed to download: %s", item.granule_id)
         return result
-
-    def save_item(
-        self,
-        item: Granule,
-        destination: Path,
-        writer: Writer,
-        params: ConversionParams,
-        force: bool = False,
-    ) -> dict[str, list]:
-        """Save granule item to output files after processing.
-
-        Args:
-            item (Granule): Granule to process
-            destination (Path): Base destination directory
-            writer (Writer): Writer instance for output
-            params (ConversionParams): Conversion parameters
-            force (bool): If True, overwrite existing files. Defaults to False.
-
-        Returns:
-            dict[str, list]: Dictionary mapping granule_id to list of output paths
-        """
-        self._validate_save_inputs(item, params)
-        datasets_dict = self._prepare_datasets(writer, params)
-        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
-
-        # Load and resample scene
-        log.debug("Loading and resampling scene")
-        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-
-        # Define area using base class helper
-        area_def = self.define_area(
-            target_crs=params.target_crs_obj,
-            area=params.area_geometry,
-            scene=scene,
-            source_crs=params.source_crs_obj,
-            resolution=params.resolution,
-        )
-        scene = scene.compute()
-        scene = self.resample(scene, area_def=area_def)
-
-        # Write datasets using base class helper
-        res = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
-
-        return res
 
     def _write_scene_datasets(
         self,

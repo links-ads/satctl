@@ -345,47 +345,6 @@ class Sentinel2Source(DataSource):
             log.warning("Failed to download all required assets for: %s", item.granule_id)
         return all_success
 
-    def save_item(
-        self,
-        item: Granule,
-        destination: Path,
-        writer: Writer,
-        params: ConversionParams,
-        force: bool = False,
-    ) -> dict[str, list]:
-        """Save granule item to output files after processing.
-
-        Args:
-            item (Granule): Granule to process
-            destination (Path): Base destination directory
-            writer (Writer): Writer instance for output
-            params (ConversionParams): Conversion parameters
-            force (bool): If True, overwrite existing files. Defaults to False.
-
-        Returns:
-            dict[str, list]: Dictionary mapping granule_id to list of output paths
-        """
-        # Validate inputs using base class helper
-        self._validate_save_inputs(item, params)
-        # Parse datasets using base class helper
-        datasets_dict = self._prepare_datasets(writer, params)
-        # Filter existing files using base class helper
-        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
-        # Load and resample scene
-        log.debug("Loading and resampling scene")
-        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-        # Define area using base class helper
-        area_def = self.define_area(
-            target_crs=params.target_crs_obj,
-            area=params.area_geometry,
-            scene=scene,
-            source_crs=params.source_crs_obj,
-            resolution=params.resolution,
-        )
-        scene = self.resample(scene, area_def=area_def)
-        # Write datasets using base class helper
-        return self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
-
 
 class Sentinel2L2ASource(Sentinel2Source):
     """Source for Sentinel-2 MSI L2A product."""
