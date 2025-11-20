@@ -150,7 +150,6 @@ class DataSource(ABC):
         """
         ...
 
-    @abstractmethod
     def save_item(
         self,
         item: Granule,
@@ -169,9 +168,58 @@ class DataSource(ABC):
             force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            dict[str, list]: Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths.
+                           Empty list means all files were skipped (already exist).
+
+        Raises:
+            FileNotFoundError: If granule data not downloaded
+            ValueError: If invalid configuration
+            Exception: If processing fails (scene loading, resampling, writing)
         """
-        ...
+        try:
+            # Validate inputs using base class helper
+            self._validate_save_inputs(item, params)
+
+            # Parse datasets using base class helper
+            datasets_dict = self._prepare_datasets(writer, params)
+
+            # Filter existing files using base class helper
+            datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
+
+            # Early return if no datasets to process (all files already exist)
+            if not datasets_dict:
+                log.info("Skipping %s - all datasets already exist", item.granule_id)
+                return {item.granule_id: []}
+
+            # Load and resample scene
+            log.debug("Loading and resampling scene for %s", item.granule_id)
+            scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+
+            # Define area using base class helper
+            area_def = self.define_area(
+                target_crs=params.target_crs_obj,
+                area=params.area_geometry,
+                scene=scene,
+                source_crs=params.source_crs_obj,
+                resolution=params.resolution,
+            )
+            scene = self.resample(scene, area_def=area_def)
+
+            # Write datasets using base class helper
+            result = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+
+            # Log success
+            num_files = len(result.get(item.granule_id, []))
+            log.info("Successfully processed %s - wrote %d file(s)", item.granule_id, num_files)
+            return result
+
+        except (FileNotFoundError, ValueError):
+            # Re-raise validation errors (these are user configuration issues)
+            raise
+        except Exception as e:
+            # Log processing errors and re-raise
+            log.error("Failed to process %s: %s", item.granule_id, str(e), exc_info=True)
+            raise
 
     @property
     def authenticator(self) -> Authenticator:
@@ -466,7 +514,8 @@ class DataSource(ABC):
             force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            tuple[list, list]: Tuple of (successful_items, failed_items)
+            tuple[list, list]: Tuple of (successful_items, failed_items).
+                             Successful includes both processed and skipped items.
         """
         if not isinstance(items, Iterable):
             items = [items]
@@ -474,6 +523,7 @@ class DataSource(ABC):
 
         success = []
         failure = []
+        skipped = []  # Track skipped items separately for logging
         num_workers = num_workers or 1
         batch_id = str(uuid.uuid4())
         # this prevents pickle errors for unpicklable entities
@@ -504,10 +554,32 @@ class DataSource(ABC):
                 }
                 for future in as_completed(future_to_item_map):
                     item = future_to_item_map[future]
-                    if future.result():
-                        success.append(item)
-                    else:
+                    try:
+                        result = future.result()
+                        # Check if files were actually written
+                        files_written = result.get(item.granule_id, [])
+                        if files_written:
+                            # Files were written - successful processing
+                            success.append(item)
+                        else:
+                            # Empty list = skipped (all files already existed)
+                            success.append(item)
+                            skipped.append(item)
+                    except Exception as e:
+                        # Worker raised an exception = processing failed
                         failure.append(item)
+                        log.warning("Failed to process %s: %s", item.granule_id, str(e))
+
+            # Log summary
+            if skipped:
+                log.info(
+                    "Batch complete: %d processed, %d skipped, %d failed",
+                    len(success) - len(skipped),
+                    len(skipped),
+                    len(failure),
+                )
+            else:
+                log.info("Batch complete: %d processed, %d failed", len(success), len(failure))
 
             emit_event(
                 ProgressEventType.BATCH_COMPLETED,
@@ -519,6 +591,7 @@ class DataSource(ABC):
             log.info("Interrupted, cleaning up...")
             if executor:
                 executor.shutdown(wait=False, cancel_futures=True)
+            raise  # Re-raise to allow outer handler to clean up
         finally:
             emit_event(
                 ProgressEventType.BATCH_COMPLETED,

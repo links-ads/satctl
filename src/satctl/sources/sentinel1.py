@@ -1,20 +1,17 @@
 import logging
 import re
 from abc import abstractmethod
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel
 from pystac_client import Client
-from xarray import DataArray
 
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder, Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
+from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
-from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
@@ -341,87 +338,6 @@ class Sentinel1Source(DataSource):
             log.warning("Failed to download all required assets for: %s", item.granule_id)
 
         return all_success
-
-    def save_item(
-        self,
-        item: Granule,
-        destination: Path,
-        writer: Writer,
-        params: ConversionParams,
-        force: bool = False,
-    ) -> dict[str, list]:
-        """Process and save Sentinel-1 granule to output files.
-
-        Workflow:
-        1. Validate inputs (local files exist, datasets specified)
-        2. Load scene with SAR data using sar-c_safe reader
-        3. Define target area (from params or full granule extent)
-        4. Resample to target projection and resolution
-        5. Write datasets to output files
-
-        Args:
-            item: Granule to process (must have local_path set)
-            destination: Base destination directory for outputs
-            writer: Writer instance for file output (GeoTIFF, NetCDF, etc.)
-            params: Conversion parameters including:
-                - datasets: List of datasets to process
-                - area_geometry: Optional AOI for spatial subsetting
-                - target_crs: Target coordinate reference system
-                - resolution: Target spatial resolution
-            force: If True, overwrite existing output files. Defaults to False.
-
-        Returns:
-            Dictionary mapping granule_id to list of output file paths
-
-        Raises:
-            FileNotFoundError: If local_path doesn't exist
-            ValueError: If datasets is None and no default composite is configured
-        """
-        # Validate that granule was downloaded
-        if item.local_path is None or not item.local_path.exists():
-            raise FileNotFoundError(f"Invalid source file or directory: {item.local_path}")
-
-        # Ensure datasets are specified
-        if params.datasets is None and self.default_composite is None:
-            raise ValueError("Missing datasets or default composite for storage")
-
-        # Parse dataset names and prepare output filenames
-        datasets_dict = self._prepare_datasets(writer, params)
-
-        # Filter existing files using base class helper
-        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
-
-        # Load scene with requested SAR datasets
-        log.debug("Loading and resampling scene")
-        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
-
-        # Define target area for resampling
-        area_def = self.define_area(
-            target_crs=params.target_crs_obj,
-            area=params.area_geometry,
-            scene=scene,
-            source_crs=params.source_crs_obj,
-            resolution=params.resolution,
-        )
-
-        # Resample to target area
-        scene = self.resample(scene, area_def=area_def)
-
-        # Write each dataset to output file
-        paths: dict[str, list] = defaultdict(list)
-        output_dir = destination / item.granule_id
-        output_dir.mkdir(exist_ok=True, parents=True)
-
-        for dataset_name, file_name in datasets_dict.items():
-            output_path = output_dir / f"{file_name}.{writer.extension}"
-            paths[item.granule_id].append(
-                writer.write(
-                    dataset=cast(DataArray, scene[dataset_name]),
-                    output_path=output_path,
-                )
-            )
-
-        return paths
 
 
 class Sentinel1GRDSource(Sentinel1Source):

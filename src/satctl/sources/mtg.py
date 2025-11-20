@@ -287,32 +287,61 @@ class MTGSource(DataSource):
             force (bool): If True, overwrite existing files. Defaults to False.
 
         Returns:
-            dict[str, list]: Dictionary mapping granule_id to list of output paths
+            dict[str, list]: Dictionary mapping granule_id to list of output paths.
+                           Empty list means all files were skipped (already exist).
+
+        Raises:
+            FileNotFoundError: If granule data not downloaded
+            ValueError: If invalid configuration
+            Exception: If processing fails (scene loading, resampling, writing)
         """
-        self._validate_save_inputs(item, params)
-        datasets_dict = self._prepare_datasets(writer, params)
-        datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
+        try:
+            # Validate inputs using base class helper
+            self._validate_save_inputs(item, params)
 
-        with self._netcdf_lock:
-            # Load and resample scene
-            log.debug("Loading and resampling scene")
-            scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+            # Parse datasets using base class helper
+            datasets_dict = self._prepare_datasets(writer, params)
 
-            # Define area using base class helper
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-            scene = scene.compute()
-            scene = self.resample(scene, area_def=area_def)
+            # Filter existing files using base class helper
+            datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
-            # Write datasets using base class helper
-            res = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+            # Early return if no datasets to process (all files already exist)
+            if not datasets_dict:
+                log.info("Skipping %s - all datasets already exist", item.granule_id)
+                return {item.granule_id: []}
 
-        return res
+            # Load and resample scene (with thread-safe NetCDF locking)
+            with self._netcdf_lock:
+                log.debug("Loading and resampling scene for %s", item.granule_id)
+                scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+
+                # Define area using base class helper
+                area_def = self.define_area(
+                    target_crs=params.target_crs_obj,
+                    area=params.area_geometry,
+                    scene=scene,
+                    source_crs=params.source_crs_obj,
+                    resolution=params.resolution,
+                )
+                # Compute scene before resampling (MTG-specific)
+                scene = scene.compute()
+                scene = self.resample(scene, area_def=area_def)
+
+                # Write datasets using base class helper
+                result = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+
+            # Log success
+            num_files = len(result.get(item.granule_id, []))
+            log.info("Successfully processed %s - wrote %d file(s)", item.granule_id, num_files)
+            return result
+
+        except (FileNotFoundError, ValueError):
+            # Re-raise validation errors (these are user configuration issues)
+            raise
+        except Exception as e:
+            # Log processing errors and re-raise
+            log.error("Failed to process %s: %s", item.granule_id, str(e), exc_info=True)
+            raise
 
     def _write_scene_datasets(
         self,
