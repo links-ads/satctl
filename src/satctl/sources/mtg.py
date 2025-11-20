@@ -68,9 +68,6 @@ class MTGSource(DataSource):
         self.reader = reader
         warnings.filterwarnings(action="ignore", category=UserWarning)
 
-        # Use synchronous dask scheduler for processing
-        dask.config.set(scheduler="synchronous")
-
     def _parse_item_name(self, name: str) -> ProductInfo:
         """Parse MTG item name into product information.
 
@@ -293,24 +290,23 @@ class MTGSource(DataSource):
         datasets_dict = self._prepare_datasets(writer, params)
         datasets_dict = self._filter_existing_files(datasets_dict, destination, item.granule_id, writer, force)
 
-        with self._netcdf_lock:
-            # Load and resample scene
-            log.debug("Loading and resampling scene")
-            scene = self.load_scene(item, datasets=list(datasets_dict.values()))
+        # Load and resample scene
+        log.debug("Loading and resampling scene")
+        scene = self.load_scene(item, datasets=list(datasets_dict.values()))
 
-            # Define area using base class helper
-            area_def = self.define_area(
-                target_crs=params.target_crs_obj,
-                area=params.area_geometry,
-                scene=scene,
-                source_crs=params.source_crs_obj,
-                resolution=params.resolution,
-            )
-            scene = scene.compute()
-            scene = self.resample(scene, area_def=area_def)
+        # Define area using base class helper
+        area_def = self.define_area(
+            target_crs=params.target_crs_obj,
+            area=params.area_geometry,
+            scene=scene,
+            source_crs=params.source_crs_obj,
+            resolution=params.resolution,
+        )
+        scene = scene.compute()
+        scene = self.resample(scene, area_def=area_def)
 
-            # Write datasets using base class helper
-            res = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
+        # Write datasets using base class helper
+        res = self._write_scene_datasets(scene, datasets_dict, destination, item.granule_id, writer)
 
         return res
 
