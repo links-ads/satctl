@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+import dask.config
 import numpy as np
 from eumdac.datastore import DataStore
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ from satpy.scene import Scene
 from satctl.auth import AuthBuilder
 from satctl.auth.eumetsat import EUMETSATAuthenticator
 from satctl.downloaders import DownloadBuilder, Downloader
-from satctl.model import Granule, ProductInfo, SearchParams
+from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
 from satctl.utils import extract_zip
 from satctl.writers import Writer
@@ -263,6 +264,40 @@ class MTGSource(DataSource):
         else:
             log.warning("Failed to download: %s", item.granule_id)
         return result
+
+    def save_item(
+        self,
+        item: Granule,
+        destination: Path,
+        writer: Writer,
+        params: ConversionParams,
+        force: bool = False,
+    ) -> dict[str, list]:
+        """Override to use synchronous dask scheduler for MTG FCI NetCDF processing.
+
+        MTG FCI data is stored in NetCDF4 format, which **currently** is not thread-safe when used
+        with dask's default threaded scheduler. This override forces synchronous
+        execution to prevent race conditions during scene loading and computation.
+
+        Args:
+            item (Granule): Granule to process
+            destination (Path): Base destination directory
+            writer (Writer): Writer instance for output
+            params (ConversionParams): Conversion parameters
+            force (bool): If True, overwrite existing files. Defaults to False.
+
+        Returns:
+            dict[str, list]: Dictionary mapping granule_id to list of output paths.
+                           Empty list means all files were skipped (already exist).
+
+        Raises:
+            FileNotFoundError: If granule data not downloaded
+            ValueError: If invalid configuration
+            Exception: If processing fails (scene loading, resampling, writing)
+        """
+
+        with dask.config.set(scheduler="synchronous"):
+            return super().save_item(item, destination, writer, params, force)
 
     def _write_scene_datasets(
         self,
