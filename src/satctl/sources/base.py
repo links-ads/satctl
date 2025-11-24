@@ -300,6 +300,8 @@ class DataSource(ABC):
                 success_count=len(success),
                 failure_count=len(failure),
             )
+            self.downloader.close()
+
         return success, failure
 
     def load_scene(
