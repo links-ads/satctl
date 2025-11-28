@@ -212,7 +212,7 @@ class MTGSource(DataSource):
             reader=reader,
             datasets=datasets,
             lazy=True,
-            scene_options=scene_options,
+            **scene_options,
         )
         # note: the data inside the FCI files is stored upside down.
         # The upper_right_corner='NE' argument flips it automatically in upright position
