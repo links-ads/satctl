@@ -11,9 +11,8 @@ from satpy.scene import Scene
 
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder, Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
+from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
-from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
@@ -254,7 +253,7 @@ class Sentinel2Source(DataSource):
             reader=reader,
             datasets=datasets,
             lazy=True,
-            scene_options=scene_options,
+            **scene_options,
         )
         # Load with specified calibration
         if not lazy:
