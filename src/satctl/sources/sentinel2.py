@@ -253,7 +253,7 @@ class Sentinel2Source(DataSource):
             reader=reader,
             datasets=datasets,
             lazy=True,
-            scene_options=scene_options,
+            **scene_options,
         )
         # Load with specified calibration
         if not lazy:
