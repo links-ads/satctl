@@ -11,9 +11,8 @@ from satpy.scene import Scene
 
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder, Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
+from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
-from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 

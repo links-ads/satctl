@@ -1,20 +1,17 @@
 import logging
 import re
 from abc import abstractmethod
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel
 from pystac_client import Client
-from xarray import DataArray
 
 from satctl.auth import AuthBuilder
 from satctl.downloaders import DownloadBuilder, Downloader
-from satctl.model import ConversionParams, Granule, ProductInfo, SearchParams
+from satctl.model import Granule, ProductInfo, SearchParams
 from satctl.sources import DataSource
-from satctl.writers import Writer
 
 log = logging.getLogger(__name__)
 
